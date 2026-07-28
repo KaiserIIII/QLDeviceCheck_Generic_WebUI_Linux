@@ -1,0 +1,136 @@
+{
+  "schema_version": 2,
+  "workstation_id": "ICT-001",
+  "description": "工控机已知设备通信方式库",
+  "settings": {
+    "allow_write_tests": false,
+    "max_report_count": 20
+  },
+  "devices": [
+    {
+      "device_id": "SER_RELAY_XP3018_001",
+      "device_name": "24VDC中间继电器",
+      "device_type": "relay",
+      "connection_type": "serial",
+      "serial_config": {
+        "baudrate": 9600,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "timeout": 2
+      },
+      "protocol": {
+        "type": "modbus_rtu",
+        "slave_id": 1,
+        "match_mode": "all",
+        "test_registers": [
+          {
+            "name": "继电器通信链路状态读取",
+            "function_code": 3,
+            "address": 0,
+            "count": 2,
+            "description": "经XP3018透明I/O读取继电器通信链路状态"
+          }
+        ],
+        "field_reference": "现场实测请求 01 03 00 00 00 02 C4 0B，响应 01 03 04 00 00 00 00 FA 33"
+      },
+      "via_device": {
+        "device_name": "苏州迅鹏 XP3018 八通道I/O模块",
+        "role": "transparent_io"
+      },
+      "test_scope": "communication_path",
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "NET_PLC_001",
+      "device_name": "PLC主站",
+      "device_type": "plc",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.100",
+        "port": 502,
+        "transport": "tcp",
+        "device_role": "server"
+      },
+      "protocol": {
+        "type": "modbus_tcp",
+        "unit_id": 1,
+        "test_registers": [
+          {"address": 0, "count": 10, "description": "PLC数据区"}
+        ]
+      },
+      "is_intermediate_module": true,
+      "child_devices": [
+        {
+          "device_id": "PLC_CHILD_001",
+          "device_name": "变频器",
+          "device_type": "vfd",
+          "module_address": 1,
+          "protocol": {
+            "type": "modbus_tcp",
+            "unit_id": 2,
+            "test_registers": [
+              {"address": 0, "count": 4, "description": "变频器运行参数"}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "device_id": "NET_RIO_001",
+      "device_name": "远程IO模块",
+      "device_type": "remote_io",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.101",
+        "port": 502,
+        "transport": "tcp",
+        "device_role": "server"
+      },
+      "protocol": {
+        "type": "modbus_tcp",
+        "unit_id": 1,
+        "test_registers": [
+          {"address": 0, "count": 16, "description": "远程IO状态"}
+        ]
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "SER_SCAN_001",
+      "device_name": "条码扫描器",
+      "device_type": "scanner",
+      "connection_type": "serial",
+      "serial_config": {
+        "baudrate": 115200,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "timeout": 3
+      },
+      "protocol": {
+        "type": "custom",
+        "test_command": "SCAN\\r\\n",
+        "expected_response_pattern": ".*"
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "PCI_NET_001",
+      "device_name": "PCIe千兆网卡",
+      "device_type": "ethernet_controller",
+      "connection_type": "pci",
+      "pci_match": {
+        "vendor_id": "10ec",
+        "class_code": "02",
+        "driver": ["r8169", "r8168"]
+      },
+      "pci_requirements": {
+        "driver_bound": true,
+        "enabled": true,
+        "net_interfaces_min": 1
+      },
+      "is_intermediate_module": false
+    }
+  ]
+}

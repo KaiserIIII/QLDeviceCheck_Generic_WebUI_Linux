@@ -1,0 +1,32 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Generated reports
+report/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Distribution
+dist/
+build/
+*.egg

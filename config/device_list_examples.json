@@ -1,0 +1,408 @@
+{
+  "schema_version": 2,
+  "workstation_id": "ICT-EXAMPLE",
+  "description": "配置示例库：覆盖串口、网口TCP/UDP、客户端/服务端、PCI、中间模块和子设备。此文件只作参考，实际运行请使用 device_list.json。",
+  "settings": {
+    "allow_write_tests": false,
+    "max_report_count": 20
+  },
+  "devices": [
+    {
+      "device_id": "EX_SER_TEMP_001",
+      "device_name": "温湿度传感器-ModbusRTU",
+      "device_type": "sensor",
+      "connection_type": "serial",
+      "serial_config": {
+        "baudrate": 9600,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "timeout": 2
+      },
+      "protocol": {
+        "type": "modbus_rtu",
+        "slave_id": 1,
+        "test_registers": [
+          {"address": 0, "count": 2, "description": "温湿度数据"}
+        ]
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_SER_METER_001",
+      "device_name": "智能电表-ModbusRTU",
+      "device_type": "meter",
+      "connection_type": "serial",
+      "serial_config": {
+        "baudrate": 2400,
+        "bytesize": 8,
+        "parity": "E",
+        "stopbits": 1,
+        "timeout": 2
+      },
+      "protocol": {
+        "type": "modbus_rtu",
+        "slave_id": 10,
+        "test_registers": [
+          {"address": 256, "count": 2, "description": "电压电流数据"}
+        ]
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_SER_RELAY_001",
+      "device_name": "RS485继电器模块-ModbusRTU",
+      "device_type": "relay_module",
+      "connection_type": "serial",
+      "serial_config": {
+        "baudrate": 9600,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "timeout": 2
+      },
+      "protocol": {
+        "type": "modbus_rtu",
+        "slave_id": 1,
+        "test_registers": [
+          {"function_code": 1, "address": 0, "count": 1, "description": "继电器线圈0状态"}
+        ]
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_SER_SCALE_001",
+      "device_name": "电子秤-ASCII",
+      "device_type": "scale",
+      "connection_type": "serial",
+      "serial_config": {
+        "baudrate": 9600,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "timeout": 3
+      },
+      "protocol": {
+        "type": "custom",
+        "test_command": "SI\\r\\n",
+        "expected_response_pattern": ".*"
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_SER_SCAN_001",
+      "device_name": "条码扫描器-串口",
+      "device_type": "scanner",
+      "connection_type": "serial",
+      "serial_config": {
+        "baudrate": 115200,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "timeout": 3
+      },
+      "protocol": {
+        "type": "custom",
+        "test_command": "SCAN\\r\\n",
+        "expected_response_pattern": ".*"
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_SER_IO_001",
+      "device_name": "IO控制器-串口中间模块",
+      "device_type": "io_controller",
+      "connection_type": "serial",
+      "serial_config": {
+        "baudrate": 19200,
+        "bytesize": 8,
+        "parity": "E",
+        "stopbits": 1,
+        "timeout": 2
+      },
+      "protocol": {
+        "type": "modbus_rtu",
+        "slave_id": 1,
+        "test_registers": [
+          {"address": 0, "count": 8, "description": "DI/DO状态"}
+        ]
+      },
+      "is_intermediate_module": true,
+      "child_devices": [
+        {
+          "device_id": "EX_IO_CHILD_SENSOR_001",
+          "device_name": "光电传感器",
+          "device_type": "sensor",
+          "module_address": 1,
+          "protocol": {
+            "type": "modbus_rtu",
+            "slave_id": 1,
+            "test_registers": [
+              {"address": 100, "count": 1, "description": "光电输入状态"}
+            ]
+          }
+        },
+        {
+          "device_id": "EX_IO_CHILD_RELAY_001",
+          "device_name": "继电器输出",
+          "device_type": "actuator",
+          "module_address": 2,
+          "protocol": {
+            "type": "modbus_rtu",
+            "slave_id": 2,
+            "test_registers": [
+              {"address": 200, "count": 1, "description": "继电器输出状态"}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "device_id": "EX_NET_PLC_001",
+      "device_name": "PLC-ModbusTCP服务端",
+      "device_type": "plc",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.100",
+        "port": 502,
+        "transport": "tcp",
+        "device_role": "server"
+      },
+      "protocol": {
+        "type": "modbus_tcp",
+        "unit_id": 1,
+        "test_registers": [
+          {"address": 0, "count": 10, "description": "PLC数据区"}
+        ]
+      },
+      "is_intermediate_module": true,
+      "child_devices": [
+        {
+          "device_id": "EX_PLC_CHILD_VFD_001",
+          "device_name": "变频器",
+          "device_type": "vfd",
+          "module_address": 1,
+          "protocol": {
+            "type": "modbus_tcp",
+            "unit_id": 2,
+            "test_registers": [
+              {"address": 0, "count": 4, "description": "变频器运行参数"}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "device_id": "EX_NET_RIO_001",
+      "device_name": "远程IO模块-ModbusTCP服务端",
+      "device_type": "remote_io",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.101",
+        "port": 502,
+        "transport": "tcp",
+        "device_role": "server"
+      },
+      "protocol": {
+        "type": "modbus_tcp",
+        "unit_id": 1,
+        "test_registers": [
+          {"address": 0, "count": 16, "description": "远程IO状态"}
+        ]
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_NET_S7_001",
+      "device_name": "西门子PLC-S7端口",
+      "device_type": "plc",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.102",
+        "port": 102,
+        "transport": "tcp",
+        "device_role": "server"
+      },
+      "protocol": {
+        "type": "s7_protocol"
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_NET_ENIP_001",
+      "device_name": "EtherNet/IP设备",
+      "device_type": "industrial_ethernet",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.103",
+        "port": 44818,
+        "transport": "tcp",
+        "device_role": "server"
+      },
+      "protocol": {
+        "type": "ethernet_ip"
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_NET_OPCUA_001",
+      "device_name": "OPC UA服务器",
+      "device_type": "opcua_server",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.110",
+        "port": 4840,
+        "transport": "tcp",
+        "device_role": "server"
+      },
+      "protocol": {
+        "type": "opc_ua"
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_NET_CAMERA_001",
+      "device_name": "视觉相机-TCP客户端",
+      "device_type": "camera",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.120",
+        "port": 9000,
+        "local_port": 9000,
+        "transport": "tcp",
+        "device_role": "client",
+        "listen_timeout": 5
+      },
+      "protocol": {
+        "type": "custom_tcp",
+        "response_match": {
+          "prefix_hex": "43 41 4D",
+          "min_length": 8
+        }
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_NET_SCAN_001",
+      "device_name": "网口条码枪-TCP服务端",
+      "device_type": "scanner",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.121",
+        "port": 2112,
+        "transport": "tcp",
+        "device_role": "server"
+      },
+      "protocol": {
+        "type": "custom_tcp",
+        "probes": [
+          {
+            "name": "设备身份查询",
+            "request_text": "INFO\\r\\n",
+            "response_match": {
+              "regex_text": "SCANNER|BARCODE",
+              "min_length": 4
+            }
+          }
+        ]
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_NET_UDP_SENSOR_001",
+      "device_name": "UDP温度采集器-服务端",
+      "device_type": "sensor",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.130",
+        "port": 6000,
+        "transport": "udp",
+        "device_role": "server",
+        "timeout": 3
+      },
+      "protocol": {
+        "type": "custom_udp",
+        "probes": [
+          {
+            "name": "温度读取",
+            "request_text": "READ\\r\\n",
+            "response_match": {
+              "regex_text": "TEMP=-?\\d+(\\.\\d+)?"
+            }
+          }
+        ]
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_NET_UDP_PUSH_001",
+      "device_name": "UDP主动上报模块-客户端",
+      "device_type": "collector",
+      "connection_type": "network",
+      "network_config": {
+        "ip": "192.168.1.131",
+        "port": 7000,
+        "local_port": 7000,
+        "transport": "udp",
+        "device_role": "client",
+        "listen_timeout": 5
+      },
+      "protocol": {
+        "type": "custom_udp",
+        "response_match": {
+          "prefix_hex": "AA 55",
+          "min_length": 6
+        }
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_PCI_NET_001",
+      "device_name": "PCIe千兆网卡",
+      "device_type": "ethernet_controller",
+      "connection_type": "pci",
+      "pci_match": {
+        "vendor_id": "10ec",
+        "class_code": "02",
+        "driver": ["r8169", "r8168"]
+      },
+      "pci_requirements": {
+        "driver_bound": true,
+        "enabled": true,
+        "net_interfaces_min": 1
+      },
+      "is_intermediate_module": false
+    },
+    {
+      "device_id": "EX_PCI_SERIAL_001",
+      "device_name": "PCIe多串口卡",
+      "device_type": "pci_serial_card",
+      "connection_type": "pci",
+      "pci_match": {
+        "class_code": "07",
+        "keywords_any": ["serial", "uart", "rs232", "rs485"]
+      },
+      "pci_requirements": {
+        "driver_bound": true,
+        "tty_nodes_min": 2
+      },
+      "is_intermediate_module": true
+    },
+    {
+      "device_id": "EX_PCI_CAN_001",
+      "device_name": "PCIe CAN通信卡",
+      "device_type": "can_card",
+      "connection_type": "pci",
+      "pci_match": {
+        "vendor_id": "1234",
+        "device_id": "5678",
+        "keywords_any": ["can"]
+      },
+      "pci_requirements": {
+        "driver_bound": true,
+        "enabled": true
+      },
+      "is_intermediate_module": false
+    }
+  ]
+}
