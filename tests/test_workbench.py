@@ -133,6 +133,19 @@ def test_reports_preserve_evidence_and_escape(service):
     assert json.loads(raw)['results'][0]['response']
 
 
+def test_html_report_is_readable_and_declares_partial_scope(service):
+    job = wait_finished(service, service.create({'station_id': 'DEMO-UNIT-7', 'batch': 'B7', 'device_ids': ['DEMO_RELAY']})['id'])
+    content, mime = export_job(job, 'html')
+    report = content.decode('utf-8')
+    assert '<table' in report and '<th' in report
+    assert 'DEMO-UNIT-7' in report and 'B7' in report
+    assert '仅选定设备' in report and '1 / 3' in report
+    assert job['config_hash'] in report
+    assert '请求' in report and '响应' in report
+    assert '@media print' in report
+    assert 'SIMULATED' in report and '真实设备验收凭据' in report
+
+
 def test_validation_history_insights(service):
     for payload in ({'scenario': 'bad'}, {'device_ids': []}, {'device_ids': ['unknown']}, {'notes': 'x' * 2001}):
         with pytest.raises(ValueError):
