@@ -199,7 +199,7 @@ def build_modbus_rtu_read(slave_id: int, function_code: int, address: int, count
 
 
 def find_modbus_rtu_response(data: bytes, slave_id: int, function_code: int,
-                             accept_exception: bool = False) -> Tuple[bool, str, bytes]:
+                             accept_exception: bool = False, expected_count: Optional[int] = None) -> Tuple[bool, str, bytes]:
     if not data:
         return False, "未收到响应", b""
     for start in range(max(0, len(data) - 4)):
@@ -210,7 +210,10 @@ def find_modbus_rtu_response(data: bytes, slave_id: int, function_code: int,
         if is_exception:
             frame_length = 5
         elif actual_function == function_code:
-            frame_length = 5 + data[start + 2]
+            byte_count = data[start + 2]
+            if not 1 <= byte_count <= 250 or (function_code in (3, 4) and byte_count % 2):
+                continue
+            frame_length = 5 + byte_count
         else:
             continue
         end = start + frame_length
@@ -224,6 +227,10 @@ def find_modbus_rtu_response(data: bytes, slave_id: int, function_code: int,
             if accept_exception:
                 return True, f"设备返回Modbus异常码0x{code:02X}，按配置允许异常响应", frame
             return False, f"设备返回Modbus异常码0x{code:02X}", frame
+        if expected_count is not None:
+            expected_bytes = expected_count * 2 if function_code in (3, 4) else (expected_count + 7) // 8
+            if frame[2] != expected_bytes:
+                return False, "Modbus RTU响应数量与请求不匹配", frame
         return True, "返回有效Modbus RTU响应", frame
     return False, "收到数据，但站号、功能码或CRC不匹配", b""
 
@@ -249,24 +256,36 @@ def build_modbus_tcp_read(transaction_id: int, unit_id: int, function_code: int,
 
 
 def validate_modbus_tcp_response(data: bytes, transaction_id: int, unit_id: int,
-                                  function_code: int, accept_exception: bool = False) -> Tuple[bool, str, bytes]:
+                                  function_code: int, accept_exception: bool = False,
+                                  expected_count: Optional[int] = None) -> Tuple[bool, str, bytes]:
     if len(data) < 9:
         return False, "Modbus TCP响应长度不足", b""
     if int.from_bytes(data[0:2], "big") != transaction_id or data[2:4] != b"\x00\x00":
         return False, "Modbus TCP事务号或协议标识不匹配", b""
     declared_length = int.from_bytes(data[4:6], "big")
     frame_length = 6 + declared_length
-    if declared_length < 3 or len(data) < frame_length:
+    if declared_length < 3 or declared_length > 254 or len(data) < frame_length:
         return False, "Modbus TCP长度字段不正确", b""
     frame = data[:frame_length]
     if frame[6] != (unit_id & 0xFF):
         return False, "Modbus TCP单元标识不匹配", frame
     actual_function = frame[7]
     if actual_function == (function_code | 0x80):
+        if declared_length != 3:
+            return False, "Modbus TCP异常响应长度不正确", frame
         code = frame[8]
         if accept_exception:
             return True, f"设备返回Modbus异常码0x{code:02X}，按配置允许异常响应", frame
         return False, f"设备返回Modbus异常码0x{code:02X}", frame
     if actual_function != function_code:
         return False, "Modbus TCP功能码不匹配", frame
+    byte_count = frame[8]
+    if not 1 <= byte_count <= 250 or declared_length != 3 + byte_count:
+        return False, "Modbus TCP数据字节数与长度不匹配", frame
+    if function_code in (3, 4) and byte_count % 2:
+        return False, "Modbus TCP寄存器数据必须为完整的双字节", frame
+    if expected_count is not None:
+        expected_bytes = expected_count * 2 if function_code in (3, 4) else (expected_count + 7) // 8
+        if byte_count != expected_bytes:
+            return False, "Modbus TCP响应数量与请求不匹配", frame
     return True, "返回有效Modbus TCP响应", frame

@@ -18,6 +18,7 @@ import serial
 import serial.tools.list_ports
 
 from .config_manager import StandardDeviceConfig
+from .transport import modbus_tcp_complete, receive_response
 from .protocol_engine import (
     ProtocolConfigError,
     build_modbus_rtu_read,
@@ -786,6 +787,7 @@ class GenericDetector:
                         slave_id=frame[0],
                         function_code=frame[1],
                         accept_exception=bool(probe.get("accept_exception", protocol.get("accept_exception", False))),
+                        expected_count=int.from_bytes(frame[4:6], "big"),
                     )
                     rule = response_rule(protocol, probe)
                     if response_ok and rule:
@@ -1136,7 +1138,11 @@ class GenericDetector:
                 if payload:
                     sock.sendall(payload)
                 should_read = bool(rule) or bool(probe.get("read_response", bool(payload)))
-                response = sock.recv(max(1, min(65536, int(probe.get("read_size", 4096) or 4096)))) if should_read else b""
+                response = receive_response(
+                    sock, timeout,
+                    max_bytes=max(1, min(65536, int(probe.get("read_size", 4096) or 4096))),
+                    complete=(lambda data: match_response(data, rule)[0]) if rule else None,
+                ) if should_read else b""
                 if should_read:
                     ok, note = match_response(response, rule)
                 else:
@@ -1206,13 +1212,15 @@ class GenericDetector:
                 self._bind_network_socket(sock, iface)
                 sock.connect((ip, port))
                 sock.sendall(frame)
-                response = sock.recv(260)
+                response = receive_response(sock, float(reg.get("timeout", protocol.get("timeout", 3)) or 3),
+                                            max_bytes=260, complete=modbus_tcp_complete)
                 response_ok, response_note, valid_frame = validate_modbus_tcp_response(
                     response,
                     transaction_id=index,
                     unit_id=unit_id,
                     function_code=function_code,
                     accept_exception=bool(reg.get("accept_exception", protocol.get("accept_exception", False))),
+                    expected_count=count,
                 )
                 rule = response_rule(protocol, reg)
                 if response_ok and rule:
