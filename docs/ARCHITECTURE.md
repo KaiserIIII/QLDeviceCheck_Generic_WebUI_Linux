@@ -38,6 +38,8 @@ Each selected configured device starts `NOT_RUN`. The adapter preserves missing 
 
 Task creation deep-copies configuration, hashes canonical JSON and commits it with metadata before execution. Results and events persist after each update. Retests use that original full snapshot and allow only original non-passing device IDs. Parent IDs retain the evidence chain. Structured attempts preserve every attributed protocol probe, including earlier failed attempts; child-only results retain parent-carrier supporting checks without adding the carrier to the selected result scope. The SHA-256 identifies configuration content; it is not a digital signature or tamper-proof audit log.
 
+History returns summary projections using SQLite filtering, ordering and pagination; overview statistics use SQL aggregates. Full configuration and protocol evidence are read only for task detail/export or unfinished-task recovery. Existing four-column databases receive derived columns in one transaction, with one-record-at-a-time backfill that preserves original JSON and rowids. No historical evidence is deleted. Comparison selections survive history page and filter changes.
+
 Comparisons check unit/station identity, batch, mode, configuration hash and selected/evidence scope. Related failed-only retests can compare shared devices, while declaring partial coverage. Communication-path and passive PCI checks are separate from electrical or business acceptance.
 
 ## Ownership and compatibility
@@ -45,6 +47,8 @@ Comparisons check unit/station identity, batch, mode, configuration hash and sel
 One process owns one database, enforced by an OS-held ownership lease acquired before recovery. A second service cannot recover or execute against an owned database; process exit releases the lease. New tasks and legacy calls also share a station mutex. Do not operate the same physical station through different data directories: database ownership does not provide hardware scheduling across separate databases.
 
 The original `web_app.py` implementation is preserved as `legacy_web.py`; the old UI is served at `/legacy`. Legacy reports under `report/` remain independent of SQLite history. The configured active TCP path now assembles fragmented responses with bounded reads; Modbus validation checks frame length, byte counts, identity and expected quantity.
+
+Legacy report buttons fetch HTML/TXT/JSON using the same session bearer token and download local Blob content. Tokens are never inserted into report URLs; authentication failures remain visible on the page.
 
 ## Local deployment choices
 

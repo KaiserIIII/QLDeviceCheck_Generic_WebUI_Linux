@@ -2,6 +2,8 @@
 
 Base URL defaults to `http://127.0.0.1:8080`. JSON is UTF-8. When `QLDC_ACCESS_TOKEN` is set, send `Authorization: Bearer <token>` for `/api/*` and `/report/*`; never place credentials in query strings. Browser requests must use the station's own origin. POST bodies are JSON objects with a 64 KiB maximum.
 
+`GET /api/jobs` returns lightweight history summaries: identity, timestamps, status, metadata, summary, progress, configuration hash and parent task ID. Full configuration snapshots, device results, attempts and events are available through task detail and export routes. Filtering/counting/pagination happen in SQLite without loading all saved evidence.
+
 | Method | Route | Behavior |
 | --- | --- | --- |
 | GET | `/api/health` | Service mode, version, active job and persistence status |
