@@ -396,6 +396,24 @@
       return ["正常", "在线", "已发现"].includes(device.status);
     }
 
+    async function openReport(path) {
+      if (typeof path !== 'string' || !/^\/report\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.(html|txt|json)$/.test(path)) {
+        throw new Error('报告地址无效');
+      }
+      const headers = {}, token = sessionStorage.getItem('qldc.token') || '';
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(path, {headers, cache: 'no-store', redirect: 'error'});
+      if (!response.ok) throw new Error(`报告读取失败 (${response.status})，请检查访问凭证`);
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = path.split('/').pop();
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+    }
+
     function stateView(device, mode) {
       if (mode === "scan") return { text: "已连接", cls: "good" };
       if (isPassed(device)) return { text: "正常", cls: "good" };
@@ -499,9 +517,9 @@
       root.innerHTML = `
         <div class="report-summary"><strong>通过 ${summary.passed || 0}</strong>，失败 ${summary.failed || 0}</div>
         <div class="report-links">
-          <a class="report-link" href="${esc(report.html_url)}" target="_blank" rel="noopener">网页</a>
-          <a class="report-link" href="${esc(report.txt_url)}" target="_blank" rel="noopener">TXT</a>
-          <a class="report-link" href="${esc(report.json_url)}" target="_blank" rel="noopener">JSON</a>
+          <button type="button" class="report-link" data-report-path="${esc(report.html_url)}">网页</button>
+          <button type="button" class="report-link" data-report-path="${esc(report.txt_url)}">TXT</button>
+          <button type="button" class="report-link" data-report-path="${esc(report.json_url)}">JSON</button>
         </div>`;
     }
 
@@ -628,6 +646,14 @@
       runOperation("/api/run", "正在扫描并测试全部已发现设备", "全部测试完成");
     });
     document.addEventListener("click", event => {
+      const reportButton = event.target.closest('[data-report-path]');
+      if (reportButton) {
+        reportButton.disabled = true;
+        openReport(reportButton.dataset.reportPath)
+          .catch(error => setStatus(error.message || '报告读取失败', 'error'))
+          .finally(() => { reportButton.disabled = false; });
+        return;
+      }
       const scanButton = event.target.closest("[data-scan-interface]");
       if (scanButton) {
         scanInterface(scanButton.dataset.interfaceKind, scanButton.dataset.interfaceName, scanButton);

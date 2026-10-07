@@ -31,7 +31,7 @@ class InspectionService:
         self.active_started = None
         self.cancel_event = threading.Event()
         try:
-            for job in self.store.all():
+            for job in self.store.unfinished():
                 if job['status'] not in TERMINAL:
                     job['status'] = 'interrupted'
                     job['finished_at'] = utc_now()
@@ -194,15 +194,7 @@ class InspectionService:
             return job
 
     def insights(self):
-        jobs = self.store.all()
-        output = {}
-        for mode in ('demo', 'live'):
-            records = [job for job in jobs if job['mode'] == mode]
-            finished = [job for job in records if job['status'] == 'completed']
-            output[mode] = {'total': len(records), 'completed': len(finished), 'passed': sum(job['summary']['verdict'] == 'PASS' for job in finished),
-                            'failed': sum(job['summary']['verdict'] == 'FAIL' for job in finished), 'devices_passed': sum(job['summary']['passed'] for job in finished),
-                            'devices_expected': sum(job['summary']['expected'] for job in finished)}
-        return output
+        return self.store.insights()
 
     def close(self):
         with self.lock:
