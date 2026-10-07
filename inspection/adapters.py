@@ -14,7 +14,9 @@ def demo_config():
 
 class DemoAdapter:
     def run(self, config, device_ids, scenario, cancelled, on_result):
-        for index, device in enumerate(d for d in catalog_devices(config) if d['device_id'] in device_ids):
+        for index, device in enumerate(catalog_devices(config)):
+            if device['device_id'] not in device_ids:
+                continue
             if cancelled():
                 return
             time.sleep(.03)
@@ -63,5 +65,13 @@ class LiveAdapter:
             selected.data.setdefault('settings', {})['allow_write_tests'] = False
             raw = GenericDetector(config=selected, serial_probe=True, subnet_probe=False).run().to_dict()
             index = {r.get('device_id'): r for r in raw.get('devices', [])}
+            checks = raw.get('connection_tests', []) or []
+            def evidence(device_id):
+                result = normalize_result(devices[device_id], index.get(device_id))
+                result['attempts'] = copy.deepcopy([check for check in checks if check.get('device_id') == device_id])
+                return result
             for device_id in chosen:
-                on_result(normalize_result(devices[device_id], index.get(device_id)))
+                result = evidence(device_id)
+                if device_id != parent['device_id']:
+                    result['supporting_checks'] = [evidence(parent['device_id'])]
+                on_result(result)

@@ -25,6 +25,7 @@ sys.path.insert(0, BASE_DIR)
 
 from core.config_manager import StandardDeviceConfig
 from core.generic_detector import DEFAULT_TCP_PORTS, GenericDetector
+from inspection.domain import config_hash
 
 REPORT_DIR = os.path.join(BASE_DIR, "report")
 WEB_INDEX_PATH = os.path.join(BASE_DIR, "web", "index.html")
@@ -66,13 +67,22 @@ def connected_devices(data: dict):
     return [item for item in data.get("devices", []) or [] if item.get("status") in CONNECTED_STATUSES]
 
 
-def cache_scan_devices(devices):
-    SCAN_STATE["devices"] = {
+def scan_state(config, state=None):
+    state = SCAN_STATE if state is None else state
+    fingerprint = config_hash(config.data)
+    if state.get('config_hash') != fingerprint:
+        state.update(devices={}, updated_at='', config_hash=fingerprint)
+    return state
+
+
+def cache_scan_devices(devices, state=None):
+    state = SCAN_STATE if state is None else state
+    state["devices"] = {
         str(item.get("device_id")): copy.deepcopy(item)
         for item in devices
         if item.get("device_id")
     }
-    SCAN_STATE["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    state["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def same_interface(connection_type: str, left: str, right: str) -> bool:
@@ -83,10 +93,11 @@ def same_interface(connection_type: str, left: str, right: str) -> bool:
     return left == right
 
 
-def cache_interface_devices(connection_type: str, interface: str, devices):
+def cache_interface_devices(connection_type: str, interface: str, devices, state=None):
+    state = SCAN_STATE if state is None else state
     retained = {
         device_id: item
-        for device_id, item in SCAN_STATE.get("devices", {}).items()
+        for device_id, item in state.get("devices", {}).items()
         if not (
             str(item.get("connection_type") or "") == connection_type
             and same_interface(connection_type, item.get("interface", ""), interface)
@@ -96,17 +107,28 @@ def cache_interface_devices(connection_type: str, interface: str, devices):
         device_id = str(item.get("device_id") or "")
         if device_id:
             retained[device_id] = copy.deepcopy(item)
-    SCAN_STATE["devices"] = retained
-    SCAN_STATE["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    state["devices"] = retained
+    state["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def selected_catalog(device_ids):
+def selected_catalog(device_ids, config=None, state=None):
+    config = config if config is not None else StandardDeviceConfig()
+    state = scan_state(config, state)
     interfaces = {
         device_id: str(item.get("interface") or "")
-        for device_id, item in SCAN_STATE.get("devices", {}).items()
+        for device_id, item in state.get("devices", {}).items()
         if item.get("interface")
     }
-    return StandardDeviceConfig().selected(device_ids, interfaces)
+    # A child using its parent's carrier must stay inherited. Pinning only the
+    # child's interface would turn it into an independent, incomplete carrier.
+    carrier_fields = ('interface', 'serial_config', 'network_config', 'pci_slot', 'pci_match', 'provided_interfaces')
+    for parent in config.raw_devices():
+        for child in parent.get('child_devices', []) or []:
+            if not any(child.get(key) for key in carrier_fields):
+                discovered = interfaces.pop(str(child.get('device_id')), '')
+                if discovered:
+                    interfaces.setdefault(str(parent.get('device_id')), discovered)
+    return config.selected(device_ids, interfaces)
 
 
 def update_interface_counts(data: dict):
@@ -122,9 +144,9 @@ def update_interface_counts(data: dict):
     })
 
 
-def prepare_ui_result(data: dict, mode: str, connected_only: bool = False) -> dict:
+def prepare_ui_result(data: dict, mode: str, connected_only: bool = False, config=None) -> dict:
     result = copy.deepcopy(data)
-    catalog_count = len(StandardDeviceConfig().all_configured_devices())
+    catalog_count = len((config if config is not None else StandardDeviceConfig()).all_configured_devices())
     devices = result.get("devices", []) or []
     if connected_only:
         devices = [item for item in devices if item.get("status") in CONNECTED_STATUSES]
@@ -223,14 +245,18 @@ def preserve_scan_interfaces(result: dict, scan_raw: dict):
     return result
 
 
-def scan_catalog(payload: dict) -> dict:
-    raw = detector_from_payload(payload).run().to_dict()
+def scan_catalog(payload: dict, config=None, state=None) -> dict:
+    config = config if config is not None else StandardDeviceConfig()
+    state = scan_state(config, state)
+    raw = detector_from_payload(payload, config=config).run().to_dict()
     discovered = connected_devices(raw)
-    cache_scan_devices(discovered)
-    return prepare_ui_result(raw, "scan", connected_only=True)
+    cache_scan_devices(discovered, state)
+    return prepare_ui_result(raw, "scan", connected_only=True, config=config)
 
 
-def scan_interface(payload: dict) -> dict:
+def scan_interface(payload: dict, config=None, state=None) -> dict:
+    catalog = config if config is not None else StandardDeviceConfig()
+    state = scan_state(catalog, state)
     connection_type = str(payload.get("interface_type") or "").strip().lower()
     interface = str(payload.get("interface") or "").strip()
     if connection_type not in ("serial", "network", "pci"):
@@ -238,7 +264,7 @@ def scan_interface(payload: dict) -> dict:
     if not interface:
         raise ValueError("缺少接口名称")
 
-    config = StandardDeviceConfig().for_interface(connection_type, interface)
+    config = catalog.for_interface(connection_type, interface)
     if config is None:
         now = time.strftime("%Y-%m-%d %H:%M:%S")
         raw = {
@@ -278,40 +304,44 @@ def scan_interface(payload: dict) -> dict:
             item for item in items
             if key == target_key and same_interface(connection_type, item.get("name", ""), interface)
         ]
-    cache_interface_devices(connection_type, interface, devices)
-    result = prepare_ui_result(raw, "scan", connected_only=True)
+    cache_interface_devices(connection_type, interface, devices, state)
+    result = prepare_ui_result(raw, "scan", connected_only=True, config=catalog)
     result["interface_type"] = connection_type
     result["interface_name"] = interface
     return result
 
 
-def test_all_discovered(payload: dict) -> dict:
-    scan_raw = detector_from_payload(payload).run().to_dict()
+def test_all_discovered(payload: dict, config=None, state=None) -> dict:
+    catalog = config if config is not None else StandardDeviceConfig()
+    state = scan_state(catalog, state)
+    scan_raw = detector_from_payload(payload, config=catalog).run().to_dict()
     discovered = connected_devices(scan_raw)
-    cache_scan_devices(discovered)
+    cache_scan_devices(discovered, state)
     device_ids = [str(item.get("device_id")) for item in discovered if item.get("device_id")]
     if not device_ids:
-        result = prepare_ui_result(scan_raw, "test_all", connected_only=True)
+        result = prepare_ui_result(scan_raw, "test_all", connected_only=True, config=catalog)
     else:
-        config = selected_catalog(device_ids)
+        config = selected_catalog(device_ids, catalog, state)
         tested = detector_from_payload(payload, config=config).run().to_dict()
-        result = prepare_ui_result(tested, "test_all")
+        result = prepare_ui_result(tested, "test_all", config=catalog)
         preserve_scan_interfaces(result, scan_raw)
         result["summary"]["scan_connected_count"] = len(discovered)
-    keep_limit = StandardDeviceConfig().settings().get("max_report_count", REPORT_KEEP_LIMIT)
+    keep_limit = catalog.settings().get("max_report_count", REPORT_KEEP_LIMIT)
     save_report(result, keep_limit)
     return result
 
 
-def test_single_device(payload: dict) -> dict:
+def test_single_device(payload: dict, config=None, state=None) -> dict:
+    catalog = config if config is not None else StandardDeviceConfig()
+    state = scan_state(catalog, state)
     device_id = str(payload.get("device_id") or "").strip()
     if not device_id:
         raise ValueError("缺少device_id")
-    if device_id not in SCAN_STATE.get("devices", {}):
+    if device_id not in state.get("devices", {}):
         raise ValueError("设备不在当前扫描结果中，请先扫描设备")
-    config = selected_catalog([device_id])
+    config = selected_catalog([device_id], catalog, state)
     tested = detector_from_payload(payload, config=config).run().to_dict()
-    result = prepare_ui_result(tested, "single")
+    result = prepare_ui_result(tested, "single", config=catalog)
     target = next((item for item in result.get("devices", []) if str(item.get("device_id")) == device_id), None)
     if target is None:
         raise ValueError("未生成该设备的测试结果")

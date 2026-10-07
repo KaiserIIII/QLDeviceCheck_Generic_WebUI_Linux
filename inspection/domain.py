@@ -20,8 +20,14 @@ def config_hash(snapshot):
 def catalog_devices(snapshot):
     # Configuration validation is pure computation; detector imports stay in LiveAdapter.
     from core.config_manager import StandardDeviceConfig
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get('settings', {}), dict):
+        raise ValueError('Invalid configuration object/settings')
+    try:
+        configured = StandardDeviceConfig(data=snapshot).all_configured_devices()
+    except (AttributeError, TypeError):
+        raise ValueError('Invalid nested configuration shape') from None
     result = []
-    for device in StandardDeviceConfig(data=snapshot).all_configured_devices():
+    for device in configured:
         scope = 'pci_passive' if device['connection_type'] == 'pci' else 'communication_path'
         result.append({'device_id': device['device_id'], 'name': device['device_name'],
                        'connection_type': device['connection_type'],
@@ -77,7 +83,8 @@ def validate_payload(payload, devices, mode):
 
 def initial_result(device, simulated):
     return dict(copy.deepcopy(device), verdict='NOT_RUN', fault_code='NOT_RUN', summary='Not executed',
-                suggestion='Run acceptance for this device', request='', response='', duration_ms=0, simulated=simulated)
+                suggestion='Run acceptance for this device', request='', response='', duration_ms=0, simulated=simulated,
+                attempts=[], supporting_checks=[])
 
 
 def summarize(results):

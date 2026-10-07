@@ -32,7 +32,9 @@ def html_report(job, marker):
                     result['interface'], scope_name, labels[verdict] + ' / ' + verdict, result['fault_code'], result['duration_ms']]) + '</tr>')
         evidence.append('<section class="evidence"><h3>' + esc(result['name']) + ' · ' + esc(result['device_id']) + '</h3><p>' +
                         esc(result['summary']) + '</p><p>排查建议：' + esc(result['suggestion']) +
-                        '</p><h4>请求 / Request</h4>' + code(result['request']) + '<h4>响应 / Response</h4>' + code(result['response']) + '</section>')
+                        '</p><h4>请求 / Request</h4>' + code(result['request']) + '<h4>响应 / Response</h4>' + code(result['response']) +
+                        '<h4>逐项探测 / Attempts</h4>' + code(json.dumps(result.get('attempts', []), ensure_ascii=False, indent=2)) +
+                        '<h4>载体支持证据 / Supporting checks</h4>' + code(json.dumps(result.get('supporting_checks', []), ensure_ascii=False, indent=2)) + '</section>')
     summary = job['summary']
     totals = '通过 {passed} · 未通过 {failed} · 需复核 {review} · 未执行 {not_run}'.format(**summary)
     return '''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -51,13 +53,15 @@ def export_job(job, format):
     if format == 'csv':
         stream = io.StringIO(newline='')
         writer = csv.writer(stream)
-        columns = ['report_marker', 'job_id', 'status', 'mode', 'scenario', 'station_id', 'batch', 'operator', 'notes', 'config_hash', 'config_snapshot', 'created_at', 'finished_at', 'device_id', 'name', 'connection_type', 'interface', 'protocol', 'scope', 'verdict', 'fault_code', 'summary', 'suggestion', 'request', 'response', 'duration_ms', 'simulated']
+        columns = ['report_marker', 'job_id', 'status', 'mode', 'scenario', 'station_id', 'batch', 'operator', 'notes', 'config_hash', 'config_snapshot', 'created_at', 'finished_at', 'device_id', 'name', 'connection_type', 'interface', 'protocol', 'scope', 'verdict', 'fault_code', 'summary', 'suggestion', 'request', 'response', 'duration_ms', 'simulated', 'attempts', 'supporting_checks']
         writer.writerow(columns)
         def safe(value):
             text = str(value if value is not None else '')
             return "'" + text if text.lstrip().startswith(('=', '+', '-', '@')) or text.startswith(('\t', '\r', '\n')) else text
         for result in job['results']:
             row = dict(job, **job['metadata'], **result, report_marker=marker, job_id=job['id'], config_snapshot=json.dumps(job['config_snapshot'], ensure_ascii=False))
+            for key in ('attempts', 'supporting_checks'):
+                row[key] = json.dumps(result.get(key, []), ensure_ascii=False)
             writer.writerow([safe(row.get(key, '')) for key in columns])
         return stream.getvalue().encode('utf-8-sig'), 'text/csv; charset=utf-8'
     raise ValueError('Unsupported export format')

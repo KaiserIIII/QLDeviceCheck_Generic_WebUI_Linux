@@ -33,18 +33,21 @@ class SQLiteStore:
             if not cursor.rowcount:
                 raise KeyError('Job not found')
 
-    def list(self, limit=20, offset=0, status='', query=''):
+    def list(self, limit=20, offset=0, status='', query='', sort='newest'):
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100 or not isinstance(offset, int) or not 0 <= offset <= 1000000:
             raise ValueError('Invalid pagination')
         if status and status not in STATUSES:
             raise ValueError('Invalid status')
         if not isinstance(query, str) or len(query) > 128:
             raise ValueError('Invalid query')
+        if sort not in ('newest', 'oldest'):
+            raise ValueError('Invalid sort')
+        direction = 'DESC' if sort == 'newest' else 'ASC'
         with self.lock:
-            rows = self.connection.execute('SELECT record FROM jobs ORDER BY created_at DESC, rowid DESC').fetchall()
+            rows = self.connection.execute('SELECT record FROM jobs ORDER BY created_at ' + direction + ', rowid ' + direction).fetchall()
         jobs = [json.loads(row[0]) for row in rows]
         jobs = [job for job in jobs if (not status or job['status'] == status) and (not query or query.casefold() in json.dumps(job['metadata'], ensure_ascii=False).casefold() or query.casefold() in job['id'].casefold())]
-        return {'jobs': jobs[offset:offset + limit], 'total': len(jobs), 'limit': limit, 'offset': offset}
+        return {'jobs': jobs[offset:offset + limit], 'total': len(jobs), 'limit': limit, 'offset': offset, 'sort': sort}
 
     def all(self):
         with self.lock:

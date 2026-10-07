@@ -114,7 +114,9 @@ def test_configured_tcp_receives_fragmented_loopback_response(modbus):
             server.close()
     thread = threading.Thread(target=serve, daemon=True)
     thread.start()
-    detector = GenericDetector()
+    from core.config_manager import StandardDeviceConfig
+    from inspection.adapters import demo_config
+    detector = GenericDetector(config=StandardDeviceConfig(data=demo_config()))
     protocol = {'type': 'modbus_tcp', 'test_registers': [{'address': 0, 'count': 1}]} if modbus else {'type': 'fixture_tcp', 'probes': [{'request_text': 'PING', 'response_match': {'exact_text': 'PONG DEVICE-01'}}]}
     parent = {'network_config': {'transport': 'tcp', 'device_role': 'server'}}
     profile = detector._network_profile({'protocol': protocol}, parent)
@@ -124,3 +126,103 @@ def test_configured_tcp_receives_fragmented_loopback_response(modbus):
         assert raw.hex(' ').upper() in result['response']
     finally:
         thread.join(2)
+
+
+def incoming_detector():
+    from core.config_manager import StandardDeviceConfig
+    from core.generic_detector import GenericDetector
+    from inspection.adapters import demo_config
+    detector = GenericDetector(config=StandardDeviceConfig(data=demo_config()))
+    detector._local_ipv4_for_iface = lambda iface: '127.0.0.1'
+    return detector
+
+
+def test_incoming_tcp_split_loopback_frame_and_matching_reply():
+    detector = incoming_detector()
+    port_socket = socket.socket()
+    port_socket.bind(('127.0.0.1', 0))
+    port = port_socket.getsockname()[1]
+    port_socket.close()
+    protocol = {'type': 'fixture_tcp', 'response_match': {'exact_text': 'PONG'}, 'reply_text': 'ACK'}
+    profile = detector._network_profile({'protocol': protocol}, {'network_config': {'transport': 'tcp', 'device_role': 'client'}})
+    replies = []
+    errors = []
+    def client():
+        try:
+            deadline = time.monotonic() + 2
+            while True:
+                try:
+                    conn = socket.create_connection(('127.0.0.1', port), timeout=.2)
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(.01)
+            with conn:
+                conn.sendall(b'PO')
+                time.sleep(.035)
+                conn.sendall(b'NG')
+                replies.append(conn.recv(128))
+        except Exception as exc:
+            errors.append(exc)
+    thread = threading.Thread(target=client, daemon=True)
+    thread.start()
+    try:
+        result = detector._test_tcp_client_configured('', '127.0.0.1', port, .4, protocol, profile)
+    finally:
+        thread.join(2)
+    assert result['ok'], result
+    assert '50 4F 4E 47' in result['response']
+    assert replies == [b'ACK'] and not errors
+
+
+@pytest.mark.parametrize('fragments,rule,expected_ip,ok,reply,reply_error', [
+    ([b'PO', b'NG'], {'exact_text': 'PONG'}, '127.0.0.1', True, [b'ACK'], False),
+    ([b'PO', socket.timeout()], {'exact_text': 'PONG'}, '127.0.0.1', False, [], False),
+    ([b'PO', ConnectionResetError()], {'exact_text': 'PONG'}, '127.0.0.1', False, [], False),
+    ([b'PO', b'NG', b''], {}, '127.0.0.1', True, [b'ACK'], False),
+    ([b'PO', socket.timeout()], {}, '127.0.0.1', True, [b'ACK'], False),
+    ([b'PONG'], {'exact_text': 'PONG'}, '127.0.0.2', False, [], False),
+    ([b'PONG'], {'exact_text': 'PONG'}, '127.0.0.1', False, [b'ACK'], True),
+])
+def test_incoming_tcp_partial_evidence_deadline_source_and_reply(monkeypatch, fragments, rule, expected_ip, ok, reply, reply_error):
+    detector = incoming_detector()
+    class Connection(FragmentSocket):
+        def __init__(self):
+            super().__init__(fragments)
+            self.sent = []
+            self.timeouts = []
+        def settimeout(self, value):
+            self.timeouts.append(value)
+        def getsockname(self):
+            return ('127.0.0.1', 123)
+        def sendall(self, data):
+            self.sent.append(data)
+            if reply_error:
+                raise ConnectionResetError('reply reset')
+        def close(self):
+            pass
+    conn = Connection()
+    class Listener:
+        def settimeout(self, value):
+            pass
+        def setsockopt(self, *args):
+            pass
+        def bind(self, address):
+            assert address == ('127.0.0.1', 123)
+        def listen(self, count):
+            pass
+        def accept(self):
+            return conn, ('127.0.0.1', 42)
+        def close(self):
+            pass
+    monkeypatch.setattr(socket, 'socket', lambda *args: Listener())
+    protocol = {'type': 'fixture_tcp', 'request_text': 'read', 'response_match': rule, 'reply_text': 'ACK'}
+    profile = detector._network_profile({'protocol': protocol}, {'network_config': {'device_role': 'client'}})
+    result = detector._test_tcp_client_configured('', expected_ip, 123, .1, protocol, profile)
+    assert result['ok'] == ok
+    assert '50 4F' in result['response']
+    if len(fragments) > 1 and fragments[1] == b'NG':
+        assert '50 4F 4E 47' in result['response']
+    assert conn.sent == reply
+    assert all(0 < t <= .1 for t in conn.timeouts)

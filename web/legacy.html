@@ -304,10 +304,12 @@
     <header class="topbar">
       <div class="title"><h1>工控机设备检测</h1></div>
       <div class="actions">
+        <button id="credentialsBtn" class="btn" type="button">访问令牌</button>
         <button id="scanBtn" class="btn btn-scan" type="button">扫描设备</button>
         <button id="testAllBtn" class="btn btn-all" type="button">测试全部</button>
       </div>
     </header>
+    <dialog id="credentials"><form id="credentialsForm"><label for="accessToken">访问令牌（仅保存在当前浏览器会话）</label><input id="accessToken" type="password" autocomplete="off"><button type="submit">保存</button><button id="credentialsCancel" type="button">取消</button></form></dialog>
 
     <div id="statusbar" class="statusbar" aria-live="polite">
       <span class="status-dot"></span><span id="statusText">等待扫描</span>
@@ -377,9 +379,12 @@
     }
 
     async function postJson(url, body = {}) {
+      const headers = { "Content-Type": "application/json" };
+      const token = sessionStorage.getItem('qldc.token') || '';
+      if (token) headers.Authorization = `Bearer ${token}`;
       const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(body),
       });
       const data = await response.json();
@@ -604,6 +609,18 @@
       }
     }
 
+    document.getElementById("credentialsBtn").addEventListener("click", () => {
+      document.getElementById("accessToken").value = sessionStorage.getItem('qldc.token') || '';
+      document.getElementById("credentials").showModal();
+    });
+    document.getElementById("credentialsCancel").addEventListener("click", () => document.getElementById("credentials").close());
+    document.getElementById("credentialsForm").addEventListener("submit", event => {
+      event.preventDefault();
+      sessionStorage.setItem('qldc.token', document.getElementById("accessToken").value);
+      document.getElementById("accessToken").value = '';
+      document.getElementById("credentials").close();
+      setStatus("访问令牌已保存，可继续扫描", "ok");
+    });
     document.getElementById("scanBtn").addEventListener("click", () => {
       runOperation("/api/scan", "正在扫描已知设备", "扫描完成");
     });

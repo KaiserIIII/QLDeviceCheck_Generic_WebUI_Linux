@@ -2,10 +2,12 @@ import copy
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 
 from .adapters import DemoAdapter, LiveAdapter, demo_config
 from .domain import SCENARIOS, TERMINAL, catalog_devices, config_hash, ensure_read_only, initial_result, refresh, utc_now, validate_payload
 from .store import SQLiteStore
+from .ownership import DatabaseOwner
 
 
 class InspectionService:
@@ -16,24 +18,51 @@ class InspectionService:
         self.adapter = adapter if adapter is not None else DemoAdapter() if demo else LiveAdapter()
         self.hardware_lock = threading.Lock()
         self.lock = threading.RLock()
-        self.store = SQLiteStore(db_path)
+        self.owner = DatabaseOwner(db_path)
+        try:
+            self.store = SQLiteStore(db_path)
+        except Exception:
+            self.owner.close()
+            raise
+        self.legacy_state = {'devices': {}, 'updated_at': '', 'config_hash': None}
         self.closed = False
         self.worker = None
         self.active_id = None
         self.active_started = None
         self.cancel_event = threading.Event()
-        for job in self.store.all():
-            if job['status'] not in TERMINAL:
-                job['status'] = 'interrupted'
-                job['finished_at'] = utc_now()
-                job['events'].append({'at': utc_now(), 'type': 'interrupted', 'message': 'Service restarted; no automatic hardware retry'})
-                self.store.update(refresh(job))
+        try:
+            for job in self.store.all():
+                if job['status'] not in TERMINAL:
+                    job['status'] = 'interrupted'
+                    job['finished_at'] = utc_now()
+                    job['events'].append({'at': utc_now(), 'type': 'interrupted', 'message': 'Service restarted; no automatic hardware retry'})
+                    self.store.update(refresh(job))
+        except Exception:
+            self.store.close()
+            self.owner.close()
+            raise
 
     def _snapshot(self):
         if self.demo:
             return demo_config()
         from core.config_manager import StandardDeviceConfig
-        return StandardDeviceConfig(self.config_path).data if self.config_path else StandardDeviceConfig().data
+        try:
+            return StandardDeviceConfig(self.config_path).data if self.config_path else StandardDeviceConfig().data
+        except (AttributeError, TypeError):
+            raise ValueError('Invalid nested configuration shape') from None
+
+    @contextmanager
+    def legacy_operation(self):
+        with self.lock:
+            if self.closed or not self.hardware_lock.acquire(blocking=False):
+                raise RuntimeError('A station operation is already running or service is closed')
+        try:
+            yield
+        finally:
+            with self.lock:
+                self.hardware_lock.release()
+                if self.closed:
+                    self.owner.close()
 
     def catalog(self):
         snapshot = self._snapshot()
@@ -111,6 +140,8 @@ class InspectionService:
                 self.active_id = None
                 self.active_started = None
                 self.hardware_lock.release()
+                if self.closed:
+                    self.owner.close()
 
     def _finish(self, job, status, started):
         job.update(status=status, finished_at=utc_now(), duration_ms=round((time.monotonic() - started) * 1000, 2))
@@ -120,8 +151,8 @@ class InspectionService:
     def get(self, job_id):
         return self.store.get(job_id)
 
-    def list_jobs(self, limit=20, offset=0, status='', query=''):
-        return self.store.list(limit, offset, status, query)
+    def list_jobs(self, limit=20, offset=0, status='', query='', sort='newest'):
+        return self.store.list(limit, offset, status, query, sort)
 
     def cancel(self, job_id):
         with self.lock:
@@ -189,3 +220,5 @@ class InspectionService:
                 self._finish(job, 'interrupted', self.active_started or time.monotonic())
             self.closed = True
             self.store.close()
+            if not self.hardware_lock.locked():
+                self.owner.close()

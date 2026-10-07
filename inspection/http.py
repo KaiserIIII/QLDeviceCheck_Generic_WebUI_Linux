@@ -86,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/jobs':
                 if method == 'POST':
                     return self._json({'ok': True, 'job': svc.create(self._body())}, 202)
-                return self._json(dict(ok=True, **svc.list_jobs(limit=int(query.get('limit', ['20'])[0]), offset=int(query.get('offset', ['0'])[0]), status=query.get('status', [''])[0], query=query.get('query', query.get('q', ['']))[0])))
+                return self._json(dict(ok=True, **svc.list_jobs(limit=int(query.get('limit', ['20'])[0]), offset=int(query.get('offset', ['0'])[0]), status=query.get('status', [''])[0], query=query.get('query', query.get('q', ['']))[0], sort=query.get('sort', ['newest'])[0])))
             if method == 'GET' and path == '/api/insights':
                 return self._json(dict(ok=True, **svc.insights()))
             if method == 'GET' and path == '/api/compare':
@@ -112,18 +112,20 @@ class Handler(BaseHTTPRequestHandler):
                     raise HttpError(403, 'Legacy hardware APIs are disabled in demo mode')
                 if path == '/api/standards' and method == 'GET':
                     from core.config_manager import StandardDeviceConfig
-                    return self._json({'ok': True, 'devices': StandardDeviceConfig(svc.config_path).devices() if svc.config_path else StandardDeviceConfig().devices(), 'legacy': True})
+                    snapshot = svc._snapshot()
+                    catalog_devices(snapshot)
+                    return self._json({'ok': True, 'devices': StandardDeviceConfig(data=snapshot).devices(), 'legacy': True})
                 if method == 'POST':
                     body = self._body()
-                    if not svc.hardware_lock.acquire(blocking=False):
-                        raise RuntimeError('A station operation is already running')
-                    try:
+                    with svc.legacy_operation():
+                        from core.config_manager import StandardDeviceConfig
+                        snapshot = svc._snapshot()
+                        catalog_devices(snapshot)
+                        ensure_read_only(snapshot)
                         import legacy_web
-                        legacy_web.RUN_LOCK = svc.hardware_lock
                         operations = {'/api/scan': legacy_web.scan_catalog, '/api/scan-interface': legacy_web.scan_interface, '/api/run': legacy_web.test_all_discovered, '/api/test-device': legacy_web.test_single_device}
-                        return self._json(dict(operations[path](body), legacy=True))
-                    finally:
-                        svc.hardware_lock.release()
+                        result = dict(operations[path](body, config=StandardDeviceConfig(data=snapshot), state=svc.legacy_state), legacy=True)
+                    return self._json(result)
             if method == 'GET' and path.startswith('/report/'):
                 if svc.demo:
                     raise HttpError(403, 'Legacy reports are disabled in demo mode')

@@ -123,7 +123,9 @@ def test_http_error_never_leaks_traceback(api, monkeypatch):
 def test_legacy_live_calls_share_acceptance_lock_and_are_explicit(api, monkeypatch):
     import legacy_web
     svc, server, request = api
-    monkeypatch.setattr(legacy_web, 'scan_catalog', lambda payload: {'ok': True, 'devices': [], 'mode': 'scan'})
+    monkeypatch.setattr(legacy_web, 'scan_catalog', lambda payload, **kwargs: {'ok': True, 'devices': [], 'mode': 'scan'})
+    from inspection.adapters import demo_config
+    monkeypatch.setattr(svc, '_snapshot', demo_config)
     svc.demo = False
     svc.mode = 'live'
     svc.hardware_lock.acquire()
@@ -133,4 +135,4 @@ def test_legacy_live_calls_share_acceptance_lock_and_are_explicit(api, monkeypat
         svc.hardware_lock.release()
     status, body = request('POST', '/api/scan', {})
     assert status == 200 and body['legacy']
-    assert legacy_web.RUN_LOCK is svc.hardware_lock
+    assert not svc.hardware_lock.locked()

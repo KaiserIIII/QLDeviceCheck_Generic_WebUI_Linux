@@ -9,6 +9,14 @@ def compare_jobs(baseline, current):
     configured = {device['device_id'] for device in catalog_devices(current['config_snapshot'])}
     partial = set(current['device_ids']) != configured
     reasons = []
+    a_identity, b_identity = baseline.get('metadata', {}), current.get('metadata', {})
+    a_station, b_station = a_identity.get('station_id', ''), b_identity.get('station_id', '')
+    if not a_station.strip() or not b_station.strip():
+        reasons.append('Missing station/unit identity')
+    elif a_station != b_station:
+        reasons.append('Station/unit identity mismatch')
+    if a_identity.get('batch', '') != b_identity.get('batch', ''):
+        reasons.append('Batch mismatch')
     if baseline['mode'] != current['mode']:
         reasons.append('Mode mismatch')
     if baseline['config_hash'] != current['config_hash']:

@@ -42,7 +42,7 @@ def test_missing_device_cannot_pass(service):
 
 
 def test_snapshot_and_retest_scope(service):
-    job = wait_finished(service, service.create({'scenario': 'faults'})['id'])
+    job = wait_finished(service, service.create({'scenario': 'faults', 'station_id': 'UNIT-A'})['id'])
     broken = [r['device_id'] for r in job['results'] if r['verdict'] != 'PASS']
     assert broken and len(broken) < len(job['results'])
     with pytest.raises(ValueError):
@@ -260,7 +260,7 @@ def test_duplicate_retest_input_is_validation_error(service):
 
 
 def test_failed_only_retest_never_claims_whole_unit_recovery(service):
-    original = wait_finished(service, service.create({'scenario': 'missing', 'device_ids': ['DEMO_RELAY']})['id'])
+    original = wait_finished(service, service.create({'scenario': 'missing', 'station_id': 'UNIT-A', 'device_ids': ['DEMO_RELAY']})['id'])
     child = wait_finished(service, service.retest(original['id'], {'scenario': 'healthy'})['id'])
     comparison = compare_jobs(original, child)
     assert comparison['comparable'] and comparison['partial_scope']
