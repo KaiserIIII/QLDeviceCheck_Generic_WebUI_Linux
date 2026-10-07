@@ -17,7 +17,8 @@ def receive_response(sock, timeout, max_bytes=4096, complete=None):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             break
-        sock.settimeout(remaining)
+        # Coarse clocks can round deadline subtraction above the original budget.
+        sock.settimeout(min(timeout, remaining))
         try:
             fragment = sock.recv(max_bytes - len(data))
         except socket.timeout:

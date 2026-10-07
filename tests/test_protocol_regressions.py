@@ -69,6 +69,24 @@ def test_timeout_preserves_partial_response():
     assert receive_response(FragmentSocket([b'partial', socket.timeout()]), .1) == b'partial'
 
 
+@pytest.mark.parametrize('epoch', [1_000_000.0, 1_000_000_000.0])
+def test_tcp_receive_timeout_stays_within_budget_on_coarse_clock(monkeypatch, epoch):
+    from core import transport
+    ticks = iter([epoch, epoch, epoch + .025, epoch + .15])
+    monkeypatch.setattr(transport.time, 'monotonic', lambda: next(ticks))
+    class BudgetSocket(FragmentSocket):
+        def __init__(self):
+            super().__init__([b'PO', b'NG', AssertionError('deadline must stop reception')])
+            self.timeouts = []
+        def settimeout(self, value):
+            self.timeouts.append(value)
+    sock = BudgetSocket()
+    assert transport.receive_response(sock, .1) == b'PONG'
+    assert len(sock.timeouts) == 2
+    assert all(0 < value <= .1 for value in sock.timeouts)
+    assert sock.timeouts[1] < sock.timeouts[0]
+
+
 def test_complete_mbap_frame_does_not_wait_for_eof():
     from core.transport import receive_response, modbus_tcp_complete
     raw = bytes.fromhex('00 01 00 00 00 05 01 03 02 00 2A')
