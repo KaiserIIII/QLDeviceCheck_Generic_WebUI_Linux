@@ -84,4 +84,8 @@ def test_declared_modbus_byte_count_cannot_be_ignored():
 
 ## Progress
 
-All tasks pending. The controller maintains the SDD progress ledger and records verified commands and commits. No user checkpoint is needed between authorized implementation tasks.
+### Authorized release delivery extension — 2026-10-07
+
+User requested a published Release suitable for immediate use. After code review and fresh verification, publish v3.0.0 from the exact verified branch commit. Supply Windows x64 and Linux x86_64 archives with reviewed offline runtime wheels, source SHA/provenance manifest, SHA256SUMS, setup/start scripts and clear Python 3.10+ prerequisite. Exercise extraction, clean offline installation and real localhost startup/task/report/restart workflow on the available Windows host. Remote Linux CI supplies offline functional evidence; physical Linux/Kylin hardware remains unverified. Preserve the PR for review; the Release tag can point directly at this branch without merging main.
+
+Tasks 1–3 are implemented and locally verified, including a seven-finding backend review fix wave. Recorded checks are in docs/VALIDATION.md. Final branch review, remote CI and publication are the remaining delivery gates. The controller maintains the local SDD progress ledger. User authorized branch/PR and Release publication; no additional user checkpoint is needed.
