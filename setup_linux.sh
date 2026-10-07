@@ -13,8 +13,12 @@ if [ ! -d ".venv" ]; then
 fi
 
 source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' || { echo '需要 Python 3.10+'; exit 1; }
+install_args=(--require-hashes -r requirements-runtime.lock --disable-pip-version-check)
+if [ -d wheels ]; then
+  install_args+=(--no-index --find-links wheels)
+fi
+python -m pip install "${install_args[@]}"
 
 echo "环境准备完成。"
 echo "启动网页系统: bash run_web.sh"
