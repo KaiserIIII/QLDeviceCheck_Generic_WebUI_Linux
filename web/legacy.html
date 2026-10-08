@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="zh-CN" data-i18n-title="工控机设备检测">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>工控机设备检测</title>
+  <style>
+    .language-control{display:flex;gap:6px;align-items:center;font-size:12px;white-space:nowrap}
+    .language-control select{font:inherit;padding:6px;border-radius:5px}
+    @media(max-width:720px){html[lang="en"] tbody td:nth-child(2)::before{content:"Communication: "}html[lang="en"] .report-cell::before{content:"Report: "}}
+    :root {
+      --bg: #eef2f5;
+      --panel: #ffffff;
+      --line: #d9e0e7;
+      --line-soft: #e8edf1;
+      --ink: #17212b;
+      --muted: #667482;
+      --blue: #1769c2;
+      --blue-dark: #12549c;
+      --green: #18864b;
+      --red: #c53b36;
+      --amber: #a96510;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Noto Sans CJK SC", "Microsoft YaHei", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, a { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .58; }
+
+    .shell {
+      width: min(1180px, calc(100% - 28px));
+      margin: 18px auto 34px;
+    }
+
+    .topbar {
+      min-height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 16px 20px;
+      color: #fff;
+      background: var(--blue-dark);
+      border-radius: 8px;
+    }
+
+    .title { min-width: 0; }
+    .title h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+
+    .btn {
+      min-height: 40px;
+      padding: 0 17px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .btn-scan { background: #fff; color: var(--blue-dark); }
+    .btn-all { background: #1fa35b; color: #fff; }
+    .btn-all:hover:not(:disabled) { background: #18894c; }
+    .btn-scan:hover:not(:disabled) { background: #edf5ff; }
+
+    .statusbar {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 4px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      flex: 0 0 9px;
+      border-radius: 50%;
+      background: #8794a1;
+    }
+    .statusbar.busy .status-dot { background: var(--amber); }
+    .statusbar.ok .status-dot { background: var(--green); }
+    .statusbar.error .status-dot { background: var(--red); }
+
+    main { display: grid; gap: 14px; }
+    .panel {
+      overflow: hidden;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 2px 7px rgba(24, 39, 56, .05);
+    }
+
+    .panel-head {
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .panel-title h2 { margin: 0; font-size: 17px; line-height: 1.3; }
+    .type-mark {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 30px;
+      border: 1px solid #c8d7e8;
+      border-radius: 6px;
+      color: var(--blue-dark);
+      background: #eef6ff;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .count {
+      color: var(--muted);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .interface-block + .interface-block { border-top: 1px solid var(--line); }
+    .interface-head {
+      min-height: 45px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 16px;
+      background: #f8fafb;
+    }
+    .interface-name { min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+    .interface-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+    .interface-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+    }
+    .interface-scan-btn {
+      min-width: 80px;
+      height: 32px;
+      padding: 0 10px;
+      border: 1px solid #b9cee5;
+      border-radius: 5px;
+      color: var(--blue-dark);
+      background: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .interface-scan-btn:hover:not(:disabled) { background: #eaf4ff; }
+    .dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #8794a1; }
+    .dot.good { background: var(--green); }
+    .dot.bad { background: var(--red); }
+    .dot.wait { background: var(--amber); }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; }
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line-soft);
+      text-align: left;
+      vertical-align: middle;
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+    tr:last-child td { border-bottom: 0; }
+    th { color: #566473; background: #fff; font-size: 13px; font-weight: 600; }
+    th:nth-child(1) { width: 27%; }
+    th:nth-child(2) { width: 21%; }
+    th:nth-child(3) { width: 13%; }
+    th:nth-child(4) { width: 12%; }
+    th:nth-child(5) { width: 27%; }
+    .device-name { font-weight: 700; }
+    .state {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .state.good { color: var(--green); }
+    .state.bad { color: var(--red); }
+    .state.wait { color: var(--amber); }
+    .test-btn {
+      min-width: 66px;
+      height: 34px;
+      border: 1px solid #b9cee5;
+      border-radius: 5px;
+      color: var(--blue-dark);
+      background: #f4f9ff;
+      font-weight: 700;
+    }
+    .test-btn:hover:not(:disabled) { background: #e6f2ff; }
+    .report-cell { color: var(--muted); }
+    .report-cell.good { color: var(--green); font-weight: 700; }
+    .report-cell.bad { color: var(--red); font-weight: 700; }
+    .empty {
+      min-height: 76px;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      color: #788592;
+      text-align: center;
+    }
+
+    .report-body {
+      min-height: 74px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+    }
+    .report-summary { color: var(--muted); }
+    .report-summary strong { color: var(--ink); }
+    .report-links { display: flex; flex-wrap: wrap; gap: 8px; }
+    .report-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid #c6d4e2;
+      border-radius: 5px;
+      color: var(--blue-dark);
+      background: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .report-link:hover { background: #eef6ff; }
+
+    @media (max-width: 720px) {
+      .shell { width: min(100% - 18px, 1180px); margin-top: 9px; }
+      .topbar { align-items: stretch; flex-direction: column; padding: 15px; }
+      .title h1 { font-size: 19px; }
+      .actions { display: grid; grid-template-columns: 1fr 1fr; }
+      .btn { width: 100%; padding: 0 10px; }
+      .table-wrap { overflow: visible; }
+      table, tbody { display: block; width: 100%; min-width: 0; }
+      thead { display: none; }
+      tbody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 9px 12px;
+        padding: 13px 14px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+      tbody tr:last-child { border-bottom: 0; }
+      tbody td { display: block; padding: 0; border: 0; min-width: 0; }
+      tbody td:nth-child(1),
+      tbody td:nth-child(2),
+      tbody td:nth-child(5) { grid-column: 1 / -1; }
+      tbody td:nth-child(2) { color: #435467; }
+      tbody td:nth-child(2)::before,
+      .report-cell::before { color: var(--muted); font-weight: 400; }
+      tbody td:nth-child(2)::before { content: "通信："; }
+      .report-cell {
+        padding-top: 9px;
+        border-top: 1px solid var(--line-soft);
+      }
+      .report-cell::before { content: "报告："; }
+      tbody td:nth-child(3) { grid-column: 1; align-self: center; }
+      tbody td:nth-child(4) { grid-column: 2; align-self: center; }
+      .report-body { align-items: flex-start; flex-direction: column; }
+      .report-links { width: 100%; }
+      .report-link { flex: 1 1 0; justify-content: center; }
+    }
+  </style>
+<script src="/assets/i18n.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="title"><h1><span data-i18n="工控机设备检测">工控机设备检测</span></h1></div>
+      <div class="actions">
+        <label class="language-control"><span data-i18n="界面语言">界面语言</span><select id="language-switch" aria-label="界面语言" data-i18n-aria="界面语言"><option value="en">English</option><option value="zh">中文</option></select></label><button id="credentialsBtn" class="btn" type="button"><span data-i18n="访问令牌">访问令牌</span></button>
+        <button id="scanBtn" class="btn btn-scan" type="button"><span data-i18n="扫描设备">扫描设备</span></button>
+        <button id="testAllBtn" class="btn btn-all" type="button"><span data-i18n="测试全部">测试全部</span></button>
+      </div>
+    </header>
+    <dialog id="credentials"><form id="credentialsForm"><label for="accessToken"><span data-i18n="访问令牌（仅保存在当前浏览器会话）">访问令牌（仅保存在当前浏览器会话）</span></label><input id="accessToken" type="password" autocomplete="off"><button type="submit"><span data-i18n="保存">保存</span></button><button id="credentialsCancel" type="button"><span data-i18n="取消">取消</span></button></form></dialog>
+
+    <div id="statusbar" class="statusbar" aria-live="polite">
+      <span class="status-dot"></span><span id="statusText"><span data-i18n="等待扫描">等待扫描</span></span>
+    </div>
+
+    <main>
+      <section class="panel" data-kind="serial">
+        <div class="panel-head">
+          <div class="panel-title"><span class="type-mark"><span data-i18n="串">串</span></span><h2><span data-i18n="串口">串口</span></h2></div>
+          <div id="serialCount" class="count"><span data-i18n="0 个设备">0 个设备</span></div>
+        </div>
+        <div id="serialBody"><div class="empty"><span data-i18n="尚未扫描">尚未扫描</span></div></div>
+      </section>
+
+      <section class="panel" data-kind="network">
+        <div class="panel-head">
+          <div class="panel-title"><span class="type-mark"><span data-i18n="网">网</span></span><h2><span data-i18n="网口">网口</span></h2></div>
+          <div id="networkCount" class="count"><span data-i18n="0 个设备">0 个设备</span></div>
+        </div>
+        <div id="networkBody"><div class="empty"><span data-i18n="尚未扫描">尚未扫描</span></div></div>
+      </section>
+
+      <section class="panel" data-kind="pci">
+        <div class="panel-head">
+          <div class="panel-title"><span class="type-mark">PCI</span><h2>PCI</h2></div>
+          <div id="pciCount" class="count"><span data-i18n="0 个设备">0 个设备</span></div>
+        </div>
+        <div id="pciBody"><div class="empty"><span data-i18n="尚未扫描">尚未扫描</span></div></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-title"><span class="type-mark"><span data-i18n="报">报</span></span><h2><span data-i18n="测试报告">测试报告</span></h2></div>
+        </div>
+        <div id="reportBody" class="report-body">
+          <div class="report-summary"><span data-i18n="尚未生成报告">尚未生成报告</span></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const T=phrase=>QLI18N.t(phrase);
+    const kinds = {
+      serial: { interfaces: "serial_ports", body: "serialBody", count: "serialCount" },
+      network: { interfaces: "network_interfaces", body: "networkBody", count: "networkCount" },
+      pci: { interfaces: "pci_devices", body: "pciBody", count: "pciCount" },
+    };
+    let currentData = null;
+    let busy = false;
+    let statusDisplay = null;
+
+    const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[char]);
+
+    function setStatus(text, state = "") {
+      statusDisplay={text,state};
+      const display=typeof text==='function'?text():T(text);
+      const bar = document.getElementById("statusbar");
+      bar.className = `statusbar ${state}`.trim();
+      document.getElementById("statusText").textContent = display;
+    }
+
+    function setBusy(value) {
+      busy = value;
+      document.getElementById("scanBtn").disabled = value;
+      document.getElementById("testAllBtn").disabled = value;
+      document.querySelectorAll(".test-btn").forEach(button => { button.disabled = value; });
+      document.querySelectorAll(".interface-scan-btn").forEach(button => { button.disabled = value; });
+    }
+
+    async function postJson(url, body = {}) {
+      const headers = { "Content-Type": "application/json" };
+      const token = sessionStorage.getItem('qldc.token') || '';
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok || data.ok === false) throw new Error(T(data.error) || T("操作失败"));
+      return data;
+    }
+
+    function isPassed(device) {
+      return ["正常", "在线", "已发现"].includes(device.status);
+    }
+
+    async function openReport(path) {
+      if (typeof path !== 'string' || !/^\/report\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.(html|txt|json)$/.test(path)) {
+        throw new Error(T("报告地址无效"));
+      }
+      const headers = {}, token = sessionStorage.getItem('qldc.token') || '';
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(path, {headers, cache: 'no-store', redirect: 'error'});
+      if (!response.ok) throw new Error(`${T("报告读取失败 (")}${response.status}${T(")，请检查访问凭证")}`);
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = path.split('/').pop();
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+    }
+
+    function stateView(device, mode) {
+      if (mode === "scan") return { text: T("已连接"), cls: "good" };
+      if (isPassed(device)) return { text: T("正常"), cls: "good" };
+      if (device.status === "需确认") return { text: T("待确认"), cls: "wait" };
+      return { text: T("异常"), cls: "bad" };
+    }
+
+    function reportText(device, mode) {
+      if (mode === "scan") return { text: T("等待测试"), cls: "" };
+      if (isPassed(device)) return { text: T("连通正常"), cls: "good" };
+      const evidence = String(device.evidence || "");
+      if (/timed out|超时|未收到响应/i.test(evidence)) return { text: T("无响应"), cls: "bad" };
+      if (evidence.includes("不存在")) return { text: T("接口不存在"), cls: "bad" };
+      return { text: T("测试失败"), cls: "bad" };
+    }
+
+    function connectionText(device) {
+      const protocol = String(device.protocol || "").toLowerCase();
+      let text = device.connection_type === "serial" ? T("串口") : (device.connection_type === "network" ? T("网口") : "PCI");
+      if (protocol === "modbus_rtu") text = "Modbus RTU";
+      if (protocol === "modbus_tcp") text = "Modbus TCP";
+      const via = device.via_device && device.via_device.device_name;
+      return via ? `${text}${T(" · 经")}${via}` : text;
+    }
+
+    function interfaceState(item) {
+      if (item.status === "正常") return { text: T("可用"), cls: "good" };
+      if (item.status === "异常") return { text: T("异常"), cls: "bad" };
+      return { text: T("待确认"), cls: "wait" };
+    }
+
+    function render(data) {
+      currentData = data;
+      Object.keys(kinds).forEach(kind => renderKind(kind, data));
+      renderReport(data);
+    }
+
+    function renderKind(kind, data) {
+      const meta = kinds[kind];
+      const devices = (data.devices || []).filter(device => device.connection_type === kind);
+      const interfaces = [...(data[meta.interfaces] || [])];
+      const knownNames = new Set(interfaces.map(item => String(item.name || "")));
+      devices.forEach(device => {
+        const name = String(device.interface || T("未确定接口"));
+        if (!knownNames.has(name)) {
+          interfaces.push({ name, status: device.status, summary: "已发现已知设备", details: {} });
+          knownNames.add(name);
+        }
+      });
+      document.getElementById(meta.count).textContent = `${devices.length}${T(" 个设备")}`;
+      const body = document.getElementById(meta.body);
+      if (!interfaces.length) {
+        body.innerHTML = `<div class="empty">${T("未发现接口")}</div>`;
+        return;
+      }
+      body.innerHTML = interfaces.map(item => {
+        const interfaceName = String(item.name || T("未确定接口"));
+        const attached = devices.filter(device => String(device.interface || T("未确定接口")) === interfaceName);
+        const state = interfaceState(item);
+        return `<div class="interface-block">
+          <div class="interface-head">
+            <div class="interface-name">${esc(interfaceName)}</div>
+            <div class="interface-actions">
+              <div class="interface-state"><span class="dot ${state.cls}"></span>${esc(state.text)}</div>
+              <button class="interface-scan-btn" type="button" data-scan-interface
+                data-interface-kind="${esc(kind)}" data-interface-name="${esc(interfaceName)}">${T("扫描设备")}</button>
+            </div>
+          </div>
+          ${attached.length ? deviceTable(attached, data.mode) : `<div class="empty">${T("未发现已知设备")}</div>`}
+        </div>`;
+      }).join("");
+    }
+
+    function deviceTable(devices, mode) {
+      const rows = devices.map(device => {
+        const deviceMode = device._ui_mode || mode;
+        const state = stateView(device, deviceMode);
+        const report = reportText(device, deviceMode);
+        return `<tr data-device-id="${esc(device.device_id)}">
+          <td><div class="device-name">${esc(device.name)}</div></td>
+          <td>${esc(connectionText(device))}</td>
+          <td class="device-state"><span class="state ${state.cls}"><span class="dot ${state.cls}"></span>${esc(state.text)}</span></td>
+          <td><button class="test-btn" type="button" data-test-device="${esc(device.device_id)}">${T("测试")}</button></td>
+          <td class="report-cell ${report.cls}">${esc(report.text)}</td>
+        </tr>`;
+      }).join("");
+      return `<div class="table-wrap"><table>
+        <thead><tr><th>${T("设备")}</th><th>${T("通信方式")}</th><th>${T("状态")}</th><th>${T("操作")}</th><th>${T("测试报告")}</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+    }
+
+    function renderReport(data) {
+      const root = document.getElementById("reportBody");
+      const report = data.report || {};
+      if (!report.url) {
+        root.innerHTML = `<div class="report-summary">${T("点击“测试全部”后生成报告")}</div>`;
+        return;
+      }
+      const summary = data.summary || {};
+      root.innerHTML = `
+        <div class="report-summary"><strong>${T("通过 ")}${summary.passed || 0}</strong>${T("，失败 ")}${summary.failed || 0}</div>
+        <div class="report-links">
+          <button type="button" class="report-link" data-report-path="${esc(report.html_url)}">${T("网页")}</button>
+          <button type="button" class="report-link" data-report-path="${esc(report.txt_url)}">TXT</button>
+          <button type="button" class="report-link" data-report-path="${esc(report.json_url)}">JSON</button>
+        </div>`;
+    }
+
+    async function runOperation(url, busyText, successText) {
+      if (busy) return;
+      setBusy(true);
+      setStatus(busyText, "busy");
+      try {
+        const data = await postJson(url);
+        render(data);
+        const count = data.summary?.device_count ?? 0;
+        setStatus(()=>`${successText()}${T("，发现 ")}${count}${T(" 个设备")}`, "ok");
+      } catch (error) {
+        setStatus(()=>T(error.message) || T("操作失败"), "error");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function testDevice(deviceId, button) {
+      if (busy) return;
+      setBusy(true);
+      button.textContent = T("测试中");
+      setStatus(()=>T("正在测试设备连通性"), "busy");
+      try {
+        const data = await postJson("/api/test-device", { device_id: deviceId });
+        const device = data.device;
+        const cached = (currentData?.devices || []).find(item => item.device_id === deviceId);
+        if (cached) Object.assign(cached, device, { _ui_mode: "single" });
+        const row = document.querySelector(`tr[data-device-id="${CSS.escape(deviceId)}"]`);
+        if (row) {
+          const state = stateView(device, "single");
+          const report = reportText(device, "single");
+          row.querySelector(".device-state").innerHTML = `<span class="state ${state.cls}"><span class="dot ${state.cls}"></span>${esc(state.text)}</span>`;
+          const reportCell = row.querySelector(".report-cell");
+          reportCell.className = `report-cell ${report.cls}`;
+          reportCell.textContent = report.text;
+        }
+        setStatus(()=>isPassed(device) ? T("设备连通正常") : T("设备测试失败"), isPassed(device) ? "ok" : "error");
+      } catch (error) {
+        setStatus(()=>T(error.message) || T("设备测试失败"), "error");
+      } finally {
+        button.textContent = T("测试");
+        setBusy(false);
+      }
+    }
+
+    function sameInterface(kind, left, right) {
+      const normalize = value => {
+        const text = String(value || "");
+        return kind === "pci" ? text.replace(/^0000:/, "") : text;
+      };
+      return normalize(left) === normalize(right);
+    }
+
+    function mergeInterfaceResult(data) {
+      if (!currentData) {
+        render(data);
+        return;
+      }
+      const kind = data.interface_type;
+      const name = data.interface_name;
+      const meta = kinds[kind];
+      const replacement = (data[meta.interfaces] || [])[0] || {
+        name, status: "正常", summary: "未发现已知设备", details: { configured_devices: [] }
+      };
+      const interfaces = [...(currentData[meta.interfaces] || [])];
+      const index = interfaces.findIndex(item => sameInterface(kind, item.name, name));
+      if (index >= 0) interfaces[index] = replacement;
+      else interfaces.push(replacement);
+      currentData[meta.interfaces] = interfaces;
+
+      const retained = (currentData.devices || []).filter(device => !(
+        device.connection_type === kind && sameInterface(kind, device.interface, name)
+      ));
+      const scanned = (data.devices || []).map(device => ({ ...device, _ui_mode: "scan" }));
+      currentData.devices = [...retained, ...scanned];
+      currentData.report = {};
+      currentData.summary = currentData.summary || {};
+      currentData.summary.device_count = currentData.devices.length;
+      currentData.summary.passed = currentData.devices.filter(isPassed).length;
+      currentData.summary.failed = currentData.devices.filter(device => device.status === "异常").length;
+      render(currentData);
+    }
+
+    async function scanInterface(kind, name, button) {
+      if (busy) return;
+      const originalText = button.textContent;
+      setBusy(true);
+      button.textContent = T("扫描中");
+      setStatus(()=>`${T("正在扫描接口 ")}${name}`, "busy");
+      try {
+        const data = await postJson("/api/scan-interface", {
+          interface_type: kind,
+          interface: name,
+        });
+        mergeInterfaceResult(data);
+        const count = data.summary?.device_count ?? 0;
+        setStatus(()=>`${name}${T(" 扫描完成，发现 ")}${count}${T(" 个设备")}`, "ok");
+      } catch (error) {
+        setStatus(()=>T(error.message) || T("接口扫描失败"), "error");
+      } finally {
+        button.textContent = originalText;
+        setBusy(false);
+      }
+    }
+
+    document.getElementById("credentialsBtn").addEventListener("click", () => {
+      document.getElementById("accessToken").value = sessionStorage.getItem('qldc.token') || '';
+      document.getElementById("credentials").showModal();
+    });
+    document.getElementById("credentialsCancel").addEventListener("click", () => document.getElementById("credentials").close());
+    document.getElementById("credentialsForm").addEventListener("submit", event => {
+      event.preventDefault();
+      sessionStorage.setItem('qldc.token', document.getElementById("accessToken").value);
+      document.getElementById("accessToken").value = '';
+      document.getElementById("credentials").close();
+      setStatus(()=>T("访问令牌已保存，可继续扫描"), "ok");
+    });
+    document.getElementById("scanBtn").addEventListener("click", () => {
+      runOperation("/api/scan", ()=>T("正在扫描已知设备"), ()=>T("扫描完成"));
+    });
+    document.getElementById("testAllBtn").addEventListener("click", () => {
+      runOperation("/api/run", ()=>T("正在扫描并测试全部已发现设备"), ()=>T("全部测试完成"));
+    });
+    document.addEventListener("click", event => {
+      const reportButton = event.target.closest('[data-report-path]');
+      if (reportButton) {
+        reportButton.disabled = true;
+        openReport(reportButton.dataset.reportPath)
+          .catch(error => setStatus(()=>T(error.message) || T("报告读取失败"), 'error'))
+          .finally(() => { reportButton.disabled = false; });
+        return;
+      }
+      const scanButton = event.target.closest("[data-scan-interface]");
+      if (scanButton) {
+        scanInterface(scanButton.dataset.interfaceKind, scanButton.dataset.interfaceName, scanButton);
+        return;
+      }
+      const testButton = event.target.closest("[data-test-device]");
+      if (testButton) testDevice(testButton.dataset.testDevice, testButton);
+    });
+    QLI18N.apply();
+    QLI18N.onChange(() => {if(currentData)render(currentData);if(statusDisplay)setStatus(statusDisplay.text,statusDisplay.state);setBusy(busy);});
+    document.getElementById('language-switch').addEventListener('change',event=>QLI18N.setLanguage(event.target.value));
+  </script>
+</body>
+</html>

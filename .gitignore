@@ -11,6 +11,13 @@ __pycache__/
 
 # Generated reports
 report/
+data/
+output/
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.superpowers/
 
 # IDE
 .idea/

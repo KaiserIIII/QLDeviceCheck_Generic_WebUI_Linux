@@ -18,6 +18,7 @@ import serial
 import serial.tools.list_ports
 
 from .config_manager import StandardDeviceConfig
+from .transport import modbus_tcp_complete, receive_response
 from .protocol_engine import (
     ProtocolConfigError,
     build_modbus_rtu_read,
@@ -121,7 +122,10 @@ class GenericDetector:
         parent_results: Dict[str, dict] = {}
         for config in raw_devices:
             phase = "中间模块测试" if config.get("is_intermediate_module") else "直连设备测试"
+            check_start = len(self.connection_tests)
             result = self._test_configured_device(config, phase)
+            for check in self.connection_tests[check_start:]:
+                check['device_id'] = str(config.get('device_id', ''))
             devices.append(result)
             parent_results[str(config.get("device_id", ""))] = result
 
@@ -133,7 +137,11 @@ class GenericDetector:
                 continue
             parent_result = parent_results.get(str(parent.get("device_id", "")), {})
             for child in children:
+                check_start = len(self.connection_tests)
                 devices.append(self._test_configured_child_device(child, parent, parent_result))
+                for check in self.connection_tests[check_start:]:
+                    check['device_id'] = str(child.get('device_id', ''))
+                    check['parent_device_id'] = str(parent.get('device_id', ''))
         self._attach_devices_to_interface_items(serial_ports, network_interfaces, pci_devices, devices)
         self._log(self._configured_child_summary(devices))
         self._log("开始第四阶段：通信协议交互验证...")
@@ -786,6 +794,7 @@ class GenericDetector:
                         slave_id=frame[0],
                         function_code=frame[1],
                         accept_exception=bool(probe.get("accept_exception", protocol.get("accept_exception", False))),
+                        expected_count=int.from_bytes(frame[4:6], "big"),
                     )
                     rule = response_rule(protocol, probe)
                     if response_ok and rule:
@@ -1136,7 +1145,11 @@ class GenericDetector:
                 if payload:
                     sock.sendall(payload)
                 should_read = bool(rule) or bool(probe.get("read_response", bool(payload)))
-                response = sock.recv(max(1, min(65536, int(probe.get("read_size", 4096) or 4096)))) if should_read else b""
+                response = receive_response(
+                    sock, timeout,
+                    max_bytes=max(1, min(65536, int(probe.get("read_size", 4096) or 4096))),
+                    complete=(lambda data: match_response(data, rule)[0]) if rule else None,
+                ) if should_read else b""
                 if should_read:
                     ok, note = match_response(response, rule)
                 else:
@@ -1206,13 +1219,15 @@ class GenericDetector:
                 self._bind_network_socket(sock, iface)
                 sock.connect((ip, port))
                 sock.sendall(frame)
-                response = sock.recv(260)
+                response = receive_response(sock, float(reg.get("timeout", protocol.get("timeout", 3)) or 3),
+                                            max_bytes=260, complete=modbus_tcp_complete)
                 response_ok, response_note, valid_frame = validate_modbus_tcp_response(
                     response,
                     transaction_id=index,
                     unit_id=unit_id,
                     function_code=function_code,
                     accept_exception=bool(reg.get("accept_exception", protocol.get("accept_exception", False))),
+                    expected_count=count,
                 )
                 rule = response_rule(protocol, reg)
                 if response_ok and rule:
@@ -1351,10 +1366,12 @@ class GenericDetector:
                     conn.settimeout(timeout)
                     incoming = b""
                     if self._protocol_has_exchange(protocol):
-                        try:
-                            incoming = conn.recv(65536)
-                        except socket.timeout:
-                            incoming = b""
+                        probes = protocol_probes(protocol)
+                        has_rules = any(response_rule(protocol, probe) for probe in probes)
+                        incoming = receive_response(
+                            conn, timeout, max_bytes=65536,
+                            complete=(lambda data: self._match_incoming_protocol_payload(protocol, data)[0]) if has_rules else None,
+                        )
                     payload_ok, payload_note = self._match_incoming_protocol_payload(protocol, incoming)
                     matched = bool(source_ok and payload_ok)
                     response = f"accepted {source[0]}:{source[1]}"
@@ -1371,8 +1388,14 @@ class GenericDetector:
                         reply_mapping["request_hex"] = first_probe.get("reply_hex")
                     elif first_probe.get("reply_text") not in (None, ""):
                         reply_mapping["request_text"] = first_probe.get("reply_text")
-                    if reply_mapping:
-                        conn.sendall(request_payload(reply_mapping))
+                    if reply_mapping and matched:
+                        try:
+                            conn.sendall(request_payload(reply_mapping))
+                        except OSError as exc:
+                            matched = False
+                            status_text = '异常'
+                            summary = f'TCP回复异常: {exc}'
+                            response += f'; reply error: {exc}'
                 finally:
                     conn.close()
             except socket.timeout:
