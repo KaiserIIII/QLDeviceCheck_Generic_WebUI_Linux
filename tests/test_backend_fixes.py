@@ -262,7 +262,7 @@ def test_nested_malformed_configuration_returns_validation_error(api, key, value
     assert request('POST', '/api/config/validate', {'config': config})[0] == 400
 
 
-def test_legacy_page_helper_uses_session_bearer_for_actual_http(api, monkeypatch):
+def test_legacy_page_helper_uses_session_bearer_for_actual_http(api, monkeypatch, tmp_path):
     import legacy_web
     svc, server, request = api
     svc.demo = False
@@ -271,17 +271,20 @@ def test_legacy_page_helper_uses_session_bearer_for_actual_http(api, monkeypatch
     monkeypatch.setattr(legacy_web, 'scan_catalog', lambda *args, **kwargs: {'ok': True})
     monkeypatch.setattr(legacy_web, 'test_single_device', lambda *args, **kwargs: {'ok': True})
     server.access_token = 'session-secret'
-    script = re.search(r'<script>([\s\S]*?)</script>', request('GET', '/legacy')[1].decode()).group(1)
+    script = request('GET', '/assets/i18n.js')[1].decode() + '\n' + re.search(r'<script>([\s\S]*?)</script>', request('GET', '/legacy')[1].decode()).group(1)
     node = shutil.which('node')
     if not node:
         pytest.skip('Node required to execute legacy page JavaScript')
+    script_path = tmp_path / 'legacy-page.js'
+    script_path.write_text(script, encoding='utf-8')
     code = """
 const vm = require('node:vm');
-const script = JSON.parse(process.argv[1]);
+const fs = require('node:fs');
+const script = fs.readFileSync(process.argv[1], 'utf8');
 const base = process.argv[2];
 const values = new Map([['qldc.token', 'session-secret']]);
 const element = {addEventListener(){}, querySelectorAll(){return []}};
-const document = {getElementById(){return element}, addEventListener(){}};
+const document = {documentElement:{dataset:{}},querySelector:()=>element,querySelectorAll:()=>[],getElementById(){return element}, addEventListener(){}};
 const context = {document, sessionStorage:{getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)}, fetch:(url,opts)=>{if(url.includes('secret'))throw Error('credential in URL');return fetch(base+url,opts)}};
 vm.createContext(context);
 vm.runInContext(script, context);
@@ -293,7 +296,7 @@ vm.runInContext(script, context);
   if(!rejected)throw Error('wrong token accepted');
 })().catch(e=>{console.error(e.message);process.exitCode=1});
 """
-    result = subprocess.run([node, '-e', code, json.dumps(script), 'http://127.0.0.1:%d' % server.server_port], capture_output=True, text=True, timeout=8)
+    result = subprocess.run([node, '-e', code, str(script_path), 'http://127.0.0.1:%d' % server.server_port], capture_output=True, text=True, timeout=8)
     assert result.returncode == 0, result.stderr
 
 

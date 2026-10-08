@@ -46,6 +46,7 @@ def test_report_language_route(api):
     assert status == 200 and b'<html lang="en">' in content
     assert '工控设备验收报告' in request('GET', path + '&lang=zh')[1].decode()
     assert request('GET', path + '&lang=fr')[0] == 400
+    assert request('GET', path + '&lang=')[0] == 400
 
 
 def test_language_resource_is_a_fixed_public_asset(api):

@@ -1,10 +1,13 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-i18n-title="工控机设备检测">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>工控机设备检测</title>
   <style>
+    .language-control{display:flex;gap:6px;align-items:center;font-size:12px;white-space:nowrap}
+    .language-control select{font:inherit;padding:6px;border-radius:5px}
+    @media(max-width:720px){html[lang="en"] tbody td:nth-child(2)::before{content:"Communication: "}html[lang="en"] .report-cell::before{content:"Report: "}}
     :root {
       --bg: #eef2f5;
       --panel: #ffffff;
@@ -298,60 +301,62 @@
       .report-link { flex: 1 1 0; justify-content: center; }
     }
   </style>
+<script src="/assets/i18n.js"></script>
 </head>
 <body>
   <div class="shell">
     <header class="topbar">
-      <div class="title"><h1>工控机设备检测</h1></div>
+      <div class="title"><h1><span data-i18n="工控机设备检测">工控机设备检测</span></h1></div>
       <div class="actions">
-        <button id="credentialsBtn" class="btn" type="button">访问令牌</button>
-        <button id="scanBtn" class="btn btn-scan" type="button">扫描设备</button>
-        <button id="testAllBtn" class="btn btn-all" type="button">测试全部</button>
+        <label class="language-control"><span data-i18n="界面语言">界面语言</span><select id="language-switch" aria-label="界面语言" data-i18n-aria="界面语言"><option value="en">English</option><option value="zh">中文</option></select></label><button id="credentialsBtn" class="btn" type="button"><span data-i18n="访问令牌">访问令牌</span></button>
+        <button id="scanBtn" class="btn btn-scan" type="button"><span data-i18n="扫描设备">扫描设备</span></button>
+        <button id="testAllBtn" class="btn btn-all" type="button"><span data-i18n="测试全部">测试全部</span></button>
       </div>
     </header>
-    <dialog id="credentials"><form id="credentialsForm"><label for="accessToken">访问令牌（仅保存在当前浏览器会话）</label><input id="accessToken" type="password" autocomplete="off"><button type="submit">保存</button><button id="credentialsCancel" type="button">取消</button></form></dialog>
+    <dialog id="credentials"><form id="credentialsForm"><label for="accessToken"><span data-i18n="访问令牌（仅保存在当前浏览器会话）">访问令牌（仅保存在当前浏览器会话）</span></label><input id="accessToken" type="password" autocomplete="off"><button type="submit"><span data-i18n="保存">保存</span></button><button id="credentialsCancel" type="button"><span data-i18n="取消">取消</span></button></form></dialog>
 
     <div id="statusbar" class="statusbar" aria-live="polite">
-      <span class="status-dot"></span><span id="statusText">等待扫描</span>
+      <span class="status-dot"></span><span id="statusText"><span data-i18n="等待扫描">等待扫描</span></span>
     </div>
 
     <main>
       <section class="panel" data-kind="serial">
         <div class="panel-head">
-          <div class="panel-title"><span class="type-mark">串</span><h2>串口</h2></div>
-          <div id="serialCount" class="count">0 个设备</div>
+          <div class="panel-title"><span class="type-mark"><span data-i18n="串">串</span></span><h2><span data-i18n="串口">串口</span></h2></div>
+          <div id="serialCount" class="count"><span data-i18n="0 个设备">0 个设备</span></div>
         </div>
-        <div id="serialBody"><div class="empty">尚未扫描</div></div>
+        <div id="serialBody"><div class="empty"><span data-i18n="尚未扫描">尚未扫描</span></div></div>
       </section>
 
       <section class="panel" data-kind="network">
         <div class="panel-head">
-          <div class="panel-title"><span class="type-mark">网</span><h2>网口</h2></div>
-          <div id="networkCount" class="count">0 个设备</div>
+          <div class="panel-title"><span class="type-mark"><span data-i18n="网">网</span></span><h2><span data-i18n="网口">网口</span></h2></div>
+          <div id="networkCount" class="count"><span data-i18n="0 个设备">0 个设备</span></div>
         </div>
-        <div id="networkBody"><div class="empty">尚未扫描</div></div>
+        <div id="networkBody"><div class="empty"><span data-i18n="尚未扫描">尚未扫描</span></div></div>
       </section>
 
       <section class="panel" data-kind="pci">
         <div class="panel-head">
           <div class="panel-title"><span class="type-mark">PCI</span><h2>PCI</h2></div>
-          <div id="pciCount" class="count">0 个设备</div>
+          <div id="pciCount" class="count"><span data-i18n="0 个设备">0 个设备</span></div>
         </div>
-        <div id="pciBody"><div class="empty">尚未扫描</div></div>
+        <div id="pciBody"><div class="empty"><span data-i18n="尚未扫描">尚未扫描</span></div></div>
       </section>
 
       <section class="panel">
         <div class="panel-head">
-          <div class="panel-title"><span class="type-mark">报</span><h2>测试报告</h2></div>
+          <div class="panel-title"><span class="type-mark"><span data-i18n="报">报</span></span><h2><span data-i18n="测试报告">测试报告</span></h2></div>
         </div>
         <div id="reportBody" class="report-body">
-          <div class="report-summary">尚未生成报告</div>
+          <div class="report-summary"><span data-i18n="尚未生成报告">尚未生成报告</span></div>
         </div>
       </section>
     </main>
   </div>
 
   <script>
+    const T=phrase=>QLI18N.t(phrase);
     const kinds = {
       serial: { interfaces: "serial_ports", body: "serialBody", count: "serialCount" },
       network: { interfaces: "network_interfaces", body: "networkBody", count: "networkCount" },
@@ -359,15 +364,18 @@
     };
     let currentData = null;
     let busy = false;
+    let statusDisplay = null;
 
     const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
     })[char]);
 
     function setStatus(text, state = "") {
+      statusDisplay={text,state};
+      const display=typeof text==='function'?text():T(text);
       const bar = document.getElementById("statusbar");
       bar.className = `statusbar ${state}`.trim();
-      document.getElementById("statusText").textContent = text;
+      document.getElementById("statusText").textContent = display;
     }
 
     function setBusy(value) {
@@ -388,7 +396,7 @@
         body: JSON.stringify(body),
       });
       const data = await response.json();
-      if (!response.ok || data.ok === false) throw new Error(data.error || "操作失败");
+      if (!response.ok || data.ok === false) throw new Error(T(data.error) || T("操作失败"));
       return data;
     }
 
@@ -398,12 +406,12 @@
 
     async function openReport(path) {
       if (typeof path !== 'string' || !/^\/report\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.(html|txt|json)$/.test(path)) {
-        throw new Error('报告地址无效');
+        throw new Error(T("报告地址无效"));
       }
       const headers = {}, token = sessionStorage.getItem('qldc.token') || '';
       if (token) headers.Authorization = `Bearer ${token}`;
       const response = await fetch(path, {headers, cache: 'no-store', redirect: 'error'});
-      if (!response.ok) throw new Error(`报告读取失败 (${response.status})，请检查访问凭证`);
+      if (!response.ok) throw new Error(`${T("报告读取失败 (")}${response.status}${T(")，请检查访问凭证")}`);
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement('a');
       link.href = url;
@@ -415,34 +423,34 @@
     }
 
     function stateView(device, mode) {
-      if (mode === "scan") return { text: "已连接", cls: "good" };
-      if (isPassed(device)) return { text: "正常", cls: "good" };
-      if (device.status === "需确认") return { text: "待确认", cls: "wait" };
-      return { text: "异常", cls: "bad" };
+      if (mode === "scan") return { text: T("已连接"), cls: "good" };
+      if (isPassed(device)) return { text: T("正常"), cls: "good" };
+      if (device.status === "需确认") return { text: T("待确认"), cls: "wait" };
+      return { text: T("异常"), cls: "bad" };
     }
 
     function reportText(device, mode) {
-      if (mode === "scan") return { text: "等待测试", cls: "" };
-      if (isPassed(device)) return { text: "连通正常", cls: "good" };
+      if (mode === "scan") return { text: T("等待测试"), cls: "" };
+      if (isPassed(device)) return { text: T("连通正常"), cls: "good" };
       const evidence = String(device.evidence || "");
-      if (/timed out|超时|未收到响应/i.test(evidence)) return { text: "无响应", cls: "bad" };
-      if (evidence.includes("不存在")) return { text: "接口不存在", cls: "bad" };
-      return { text: "测试失败", cls: "bad" };
+      if (/timed out|超时|未收到响应/i.test(evidence)) return { text: T("无响应"), cls: "bad" };
+      if (evidence.includes("不存在")) return { text: T("接口不存在"), cls: "bad" };
+      return { text: T("测试失败"), cls: "bad" };
     }
 
     function connectionText(device) {
       const protocol = String(device.protocol || "").toLowerCase();
-      let text = device.connection_type === "serial" ? "串口" : (device.connection_type === "network" ? "网口" : "PCI");
+      let text = device.connection_type === "serial" ? T("串口") : (device.connection_type === "network" ? T("网口") : "PCI");
       if (protocol === "modbus_rtu") text = "Modbus RTU";
       if (protocol === "modbus_tcp") text = "Modbus TCP";
       const via = device.via_device && device.via_device.device_name;
-      return via ? `${text} · 经${via}` : text;
+      return via ? `${text}${T(" · 经")}${via}` : text;
     }
 
     function interfaceState(item) {
-      if (item.status === "正常") return { text: "可用", cls: "good" };
-      if (item.status === "异常") return { text: "异常", cls: "bad" };
-      return { text: "待确认", cls: "wait" };
+      if (item.status === "正常") return { text: T("可用"), cls: "good" };
+      if (item.status === "异常") return { text: T("异常"), cls: "bad" };
+      return { text: T("待确认"), cls: "wait" };
     }
 
     function render(data) {
@@ -457,21 +465,21 @@
       const interfaces = [...(data[meta.interfaces] || [])];
       const knownNames = new Set(interfaces.map(item => String(item.name || "")));
       devices.forEach(device => {
-        const name = String(device.interface || "未确定接口");
+        const name = String(device.interface || T("未确定接口"));
         if (!knownNames.has(name)) {
           interfaces.push({ name, status: device.status, summary: "已发现已知设备", details: {} });
           knownNames.add(name);
         }
       });
-      document.getElementById(meta.count).textContent = `${devices.length} 个设备`;
+      document.getElementById(meta.count).textContent = `${devices.length}${T(" 个设备")}`;
       const body = document.getElementById(meta.body);
       if (!interfaces.length) {
-        body.innerHTML = '<div class="empty">未发现接口</div>';
+        body.innerHTML = `<div class="empty">${T("未发现接口")}</div>`;
         return;
       }
       body.innerHTML = interfaces.map(item => {
-        const interfaceName = String(item.name || "未确定接口");
-        const attached = devices.filter(device => String(device.interface || "未确定接口") === interfaceName);
+        const interfaceName = String(item.name || T("未确定接口"));
+        const attached = devices.filter(device => String(device.interface || T("未确定接口")) === interfaceName);
         const state = interfaceState(item);
         return `<div class="interface-block">
           <div class="interface-head">
@@ -479,10 +487,10 @@
             <div class="interface-actions">
               <div class="interface-state"><span class="dot ${state.cls}"></span>${esc(state.text)}</div>
               <button class="interface-scan-btn" type="button" data-scan-interface
-                data-interface-kind="${esc(kind)}" data-interface-name="${esc(interfaceName)}">扫描设备</button>
+                data-interface-kind="${esc(kind)}" data-interface-name="${esc(interfaceName)}">${T("扫描设备")}</button>
             </div>
           </div>
-          ${attached.length ? deviceTable(attached, data.mode) : '<div class="empty">未发现已知设备</div>'}
+          ${attached.length ? deviceTable(attached, data.mode) : `<div class="empty">${T("未发现已知设备")}</div>`}
         </div>`;
       }).join("");
     }
@@ -496,12 +504,12 @@
           <td><div class="device-name">${esc(device.name)}</div></td>
           <td>${esc(connectionText(device))}</td>
           <td class="device-state"><span class="state ${state.cls}"><span class="dot ${state.cls}"></span>${esc(state.text)}</span></td>
-          <td><button class="test-btn" type="button" data-test-device="${esc(device.device_id)}">测试</button></td>
+          <td><button class="test-btn" type="button" data-test-device="${esc(device.device_id)}">${T("测试")}</button></td>
           <td class="report-cell ${report.cls}">${esc(report.text)}</td>
         </tr>`;
       }).join("");
       return `<div class="table-wrap"><table>
-        <thead><tr><th>设备</th><th>通信方式</th><th>状态</th><th>操作</th><th>测试报告</th></tr></thead>
+        <thead><tr><th>${T("设备")}</th><th>${T("通信方式")}</th><th>${T("状态")}</th><th>${T("操作")}</th><th>${T("测试报告")}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>`;
     }
@@ -510,14 +518,14 @@
       const root = document.getElementById("reportBody");
       const report = data.report || {};
       if (!report.url) {
-        root.innerHTML = '<div class="report-summary">点击“测试全部”后生成报告</div>';
+        root.innerHTML = `<div class="report-summary">${T("点击“测试全部”后生成报告")}</div>`;
         return;
       }
       const summary = data.summary || {};
       root.innerHTML = `
-        <div class="report-summary"><strong>通过 ${summary.passed || 0}</strong>，失败 ${summary.failed || 0}</div>
+        <div class="report-summary"><strong>${T("通过 ")}${summary.passed || 0}</strong>${T("，失败 ")}${summary.failed || 0}</div>
         <div class="report-links">
-          <button type="button" class="report-link" data-report-path="${esc(report.html_url)}">网页</button>
+          <button type="button" class="report-link" data-report-path="${esc(report.html_url)}">${T("网页")}</button>
           <button type="button" class="report-link" data-report-path="${esc(report.txt_url)}">TXT</button>
           <button type="button" class="report-link" data-report-path="${esc(report.json_url)}">JSON</button>
         </div>`;
@@ -531,9 +539,9 @@
         const data = await postJson(url);
         render(data);
         const count = data.summary?.device_count ?? 0;
-        setStatus(`${successText}，发现 ${count} 个设备`, "ok");
+        setStatus(()=>`${successText()}${T("，发现 ")}${count}${T(" 个设备")}`, "ok");
       } catch (error) {
-        setStatus(error.message || "操作失败", "error");
+        setStatus(()=>T(error.message) || T("操作失败"), "error");
       } finally {
         setBusy(false);
       }
@@ -542,8 +550,8 @@
     async function testDevice(deviceId, button) {
       if (busy) return;
       setBusy(true);
-      button.textContent = "测试中";
-      setStatus("正在测试设备连通性", "busy");
+      button.textContent = T("测试中");
+      setStatus(()=>T("正在测试设备连通性"), "busy");
       try {
         const data = await postJson("/api/test-device", { device_id: deviceId });
         const device = data.device;
@@ -558,11 +566,11 @@
           reportCell.className = `report-cell ${report.cls}`;
           reportCell.textContent = report.text;
         }
-        setStatus(isPassed(device) ? "设备连通正常" : "设备测试失败", isPassed(device) ? "ok" : "error");
+        setStatus(()=>isPassed(device) ? T("设备连通正常") : T("设备测试失败"), isPassed(device) ? "ok" : "error");
       } catch (error) {
-        setStatus(error.message || "设备测试失败", "error");
+        setStatus(()=>T(error.message) || T("设备测试失败"), "error");
       } finally {
-        button.textContent = "测试";
+        button.textContent = T("测试");
         setBusy(false);
       }
     }
@@ -609,8 +617,8 @@
       if (busy) return;
       const originalText = button.textContent;
       setBusy(true);
-      button.textContent = "扫描中";
-      setStatus(`正在扫描接口 ${name}`, "busy");
+      button.textContent = T("扫描中");
+      setStatus(()=>`${T("正在扫描接口 ")}${name}`, "busy");
       try {
         const data = await postJson("/api/scan-interface", {
           interface_type: kind,
@@ -618,9 +626,9 @@
         });
         mergeInterfaceResult(data);
         const count = data.summary?.device_count ?? 0;
-        setStatus(`${name} 扫描完成，发现 ${count} 个设备`, "ok");
+        setStatus(()=>`${name}${T(" 扫描完成，发现 ")}${count}${T(" 个设备")}`, "ok");
       } catch (error) {
-        setStatus(error.message || "接口扫描失败", "error");
+        setStatus(()=>T(error.message) || T("接口扫描失败"), "error");
       } finally {
         button.textContent = originalText;
         setBusy(false);
@@ -637,20 +645,20 @@
       sessionStorage.setItem('qldc.token', document.getElementById("accessToken").value);
       document.getElementById("accessToken").value = '';
       document.getElementById("credentials").close();
-      setStatus("访问令牌已保存，可继续扫描", "ok");
+      setStatus(()=>T("访问令牌已保存，可继续扫描"), "ok");
     });
     document.getElementById("scanBtn").addEventListener("click", () => {
-      runOperation("/api/scan", "正在扫描已知设备", "扫描完成");
+      runOperation("/api/scan", ()=>T("正在扫描已知设备"), ()=>T("扫描完成"));
     });
     document.getElementById("testAllBtn").addEventListener("click", () => {
-      runOperation("/api/run", "正在扫描并测试全部已发现设备", "全部测试完成");
+      runOperation("/api/run", ()=>T("正在扫描并测试全部已发现设备"), ()=>T("全部测试完成"));
     });
     document.addEventListener("click", event => {
       const reportButton = event.target.closest('[data-report-path]');
       if (reportButton) {
         reportButton.disabled = true;
         openReport(reportButton.dataset.reportPath)
-          .catch(error => setStatus(error.message || '报告读取失败', 'error'))
+          .catch(error => setStatus(()=>T(error.message) || T("报告读取失败"), 'error'))
           .finally(() => { reportButton.disabled = false; });
         return;
       }
@@ -662,6 +670,9 @@
       const testButton = event.target.closest("[data-test-device]");
       if (testButton) testDevice(testButton.dataset.testDevice, testButton);
     });
+    QLI18N.apply();
+    QLI18N.onChange(() => {if(currentData)render(currentData);if(statusDisplay)setStatus(statusDisplay.text,statusDisplay.state);setBusy(busy);});
+    document.getElementById('language-switch').addEventListener('change',event=>QLI18N.setLanguage(event.target.value));
   </script>
 </body>
 </html>

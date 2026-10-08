@@ -41,6 +41,13 @@ See [DEMO.md](DEMO.md) for the optional browser workflow. CI runs the Python off
 - CI source `a9bbf872bb53a7dbbd87d86c85f3f009dfc72a9b`: Linux/Windows Python 3.10/3.13 all passed in [run 37607639342](https://github.com/KaiserIIII/QLDeviceCheck_Generic_WebUI_Linux/actions/runs/37607639342). Final changed-source outcomes are available from [PR checks](https://github.com/KaiserIIII/QLDeviceCheck_Generic_WebUI_Linux/pull/1/checks) and the Release notes.
 - Release candidate `e0dc7fc`: Windows package extraction, fresh offline runtime installation with `PIP_NO_INDEX=1`, launcher argument forwarding, actual localhost server, fault task, export, healthy failed-only retest, scope comparison and restart/history preservation passed. Final bundles are rebuilt from the final tagged commit and checked again before upload; the final source/hash and smoke outcome are recorded in the Release notes.
 
+## Recorded results — 2026-10-08 bilingual upgrade
+
+- Python regression suite: **100 passed in 20.90 seconds** on the Windows development environment. The new report route checks English and Chinese exports, byte-identical JSON/CSV output, fixed public asset delivery, unsupported and explicitly blank language rejection, and HTML escaping of original evidence.
+- JavaScript syntax and Python compilation checks passed for the bilingual assets and application modules. Configuration validation passed with 5 root devices, 1 child device and writes disabled; the original offline self-test passed all **23 checks**.
+- Browser workflow: the new bilingual workflow passed on Chromium with English and Chinese switching, task creation, evidence display, English HTML download, failed-only retest, history filters, cross-page comparison selection retention, reload preference, blocked `localStorage` fallback, the compatibility scan page and 390 px layout. The existing Chinese workflow also passed with zero page errors.
+- API boundary: omitted `lang` keeps the Chinese default; `lang=zh` and `lang=en` return the requested report language; unsupported or explicitly blank language values return HTTP 400. No live device write or unknown hardware operation was used by these checks.
+
 ## Scope and limits
 
 Coverage is collected for `inspection/`, `core.protocol_engine` and `core.transport`, not the entire legacy detector or repository. The original offline self-test adds loopback checks but does not establish field hardware compatibility. Browser tests are separate from the Python CI job and use an existing local browser runtime.

@@ -15,6 +15,7 @@ const { chromium } = require('playwright');
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   try {
+    await page.addInitScript(()=>localStorage.setItem('qldc.lang','zh'));
     await page.goto(url);
     if (process.env.QLDC_BROWSER_TOKEN) {
       await page.getByRole('button', { name: '访问凭证', exact: true }).click();
@@ -162,6 +163,7 @@ const { chromium } = require('playwright');
     // responses. test_legacy_reports.py separately covers the real loopback server.
     const legacy = await browser.newPage({viewport: {width: 1200, height: 900}});
     legacy.on('pageerror', e => errors.push(e.message));
+    await legacy.addInitScript(()=>localStorage.setItem('qldc.lang','zh'));
     await legacy.goto(url + '/legacy');
     await legacy.evaluate(() => {
       sessionStorage.setItem('qldc.token', 'browser-fixture-token');

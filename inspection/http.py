@@ -101,7 +101,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({'ok': True, 'job': svc.get(job_id)})
                 if method == 'GET' and action == 'export':
                     format = query.get('format', ['html'])[0]
-                    content, mime = export_job(svc.get(job_id), format, lang=query.get('lang', ['zh'])[0])
+                    export_query = parse_qs(parsed.query, keep_blank_values=True)
+                    content, mime = export_job(svc.get(job_id), format, lang=export_query.get('lang', ['zh'])[0])
                     return self._send(content, mime, headers={'Content-Disposition': 'attachment; filename="acceptance-' + job_id + '.' + format + '"'})
                 if method == 'POST' and action in ('cancel', 'retest'):
                     body = self._body()

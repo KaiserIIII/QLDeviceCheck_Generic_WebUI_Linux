@@ -13,7 +13,7 @@ def test_legacy_report_helper_authorizes_blobs_and_rejects_bad_credentials(api, 
     import inspection.http
     svc, server, request = api
     # Only serve static synthetic files; this never invokes a hardware operation.
-    script = re.search(r'<script>([\s\S]*?)</script>', request('GET', '/legacy')[1].decode()).group(1)
+    script = request('GET', '/assets/i18n.js')[1].decode() + '\n' + re.search(r'<script>([\s\S]*?)</script>', request('GET', '/legacy')[1].decode()).group(1)
     monkeypatch.setattr(inspection.http, 'BASE_DIR', tmp_path)
     svc.demo = False
     root = tmp_path / 'report' / 'fixture'
@@ -24,13 +24,15 @@ def test_legacy_report_helper_authorizes_blobs_and_rejects_bad_credentials(api, 
     node = shutil.which('node')
     if not node:
         pytest.skip('Node required to execute actual legacy helper')
+    script_path = tmp_path / 'legacy-report.js'
+    script_path.write_text(script, encoding='utf-8')
     code = r"""
-const vm = require('node:vm'), assert = require('node:assert/strict');
-const script = JSON.parse(process.argv[1]), base = process.argv[2];
+const vm = require('node:vm'), assert = require('node:assert/strict'), fs = require('node:fs');
+const script = fs.readFileSync(process.argv[1], 'utf8'), base = process.argv[2];
 const values = new Map([['qldc.token','session-secret']]);
 const blobs = [], clicked = [], revoked = [];
 const element = {addEventListener(){}, querySelectorAll(){return []}};
-const document = {getElementById:()=>element, addEventListener(){}, body:{append(){}},
+const document = {documentElement:{dataset:{}},querySelector:()=>element,querySelectorAll:()=>[],getElementById:()=>element, addEventListener(){}, body:{append(){}},
   createElement:()=>({click(){clicked.push({href:this.href,download:this.download})},remove(){}})};
 const context = {document, Blob, URL:{createObjectURL:b=>{blobs.push(b);return 'blob:local-'+blobs.length},revokeObjectURL:u=>revoked.push(u)},
   setTimeout:f=>f(), sessionStorage:{getItem:k=>values.get(k)},
@@ -53,11 +55,11 @@ vm.createContext(context);vm.runInContext(script,context);
     await assert.rejects(vm.runInContext(`openReport(${JSON.stringify(url)})`,context));
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
-    result = subprocess.run([node, '-e', code, json.dumps(script), f'http://127.0.0.1:{server.server_port}'],
+    result = subprocess.run([node, '-e', code, str(script_path), f'http://127.0.0.1:{server.server_port}'],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
     assert request('GET', '/report/fixture/report.html')[0] == 401
     server.access_token = ''
     code_local = code[:code.index('(async()=>{')] + "(async()=>{values.set('qldc.token','');await vm.runInContext(\"openReport('/report/fixture/report.txt')\",context);assert.equal(await blobs[0].text(),'synthetic report txt');})().catch(e=>{console.error(e);process.exitCode=1});"
-    result = subprocess.run([node, '-e', code_local, json.dumps(script), f'http://127.0.0.1:{server.server_port}'], capture_output=True, text=True, timeout=10)
+    result = subprocess.run([node, '-e', code_local, str(script_path), f'http://127.0.0.1:{server.server_port}'], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
