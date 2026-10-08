@@ -21,6 +21,8 @@
 
 直接安装可从 [Releases](https://github.com/KaiserIIII/QLDeviceCheck_Generic_WebUI_Linux/releases) 下载 Windows x64 或 Linux x86_64 包，内含离线运行依赖。先安装 CPython 3.10+，Windows 双击 `Start-Demo.cmd`，Linux 运行 `bash run_demo.sh`。[Release 使用说明](docs/RELEASE.md)。
 
+工作台和兼容扫描页面支持 **English／简体中文**。使用页面语言选择器切换，浏览器会保存选择；首次访问时按浏览器语言选择中文或英文。HTML 报告按当前界面语言导出，配置设备名称、输入信息和原始协议证据保留原文。
+
 需要 Python **3.10+**；Windows 也可运行演示及离线测试。
 
 ```bash

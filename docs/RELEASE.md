@@ -4,8 +4,8 @@
 
 | 包 | 用途 |
 | --- | --- |
-| `QLDeviceCheck-v3.0.0-windows-x64.zip` | Windows x64，含离线 psutil/pyserial 运行依赖 |
-| `QLDeviceCheck-v3.0.0-linux-x86_64.zip` | Linux x86_64/glibc，含离线运行依赖 |
+| `QLDeviceCheck-v3.1.0-windows-x64.zip` | Windows x64，含中英界面及离线 psutil/pyserial 运行依赖 |
+| `QLDeviceCheck-v3.1.0-linux-x86_64.zip` | Linux x86_64/glibc，含中英界面及离线运行依赖 |
 | `SHA256SUMS.txt` | 下载文件校验值 |
 
 需要预先安装 **CPython 3.10+**，包括 venv/pip。包不包含 Python 解释器；ARM、其他架构及 Python 自由线程构建需要匹配的依赖制品。Linux 的 psutil wheel 支持 glibc 2.12+ 的常规 CPython 构建。项目方已确认项目测试可用；本次 Release 的检查结果见 [VALIDATION.md](VALIDATION.md)。
@@ -26,8 +26,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run_web.ps1 --config confi
 ## Linux
 
 ```bash
-unzip QLDeviceCheck-v3.0.0-linux-x86_64.zip
-cd QLDeviceCheck-v3.0.0
+unzip QLDeviceCheck-v3.1.0-linux-x86_64.zip
+cd QLDeviceCheck-v3.1.0
 bash setup_linux.sh
 bash run_demo.sh
 # 真实验收使用审核后的设备配置：
@@ -40,6 +40,8 @@ bash run_web.sh --config config/device_list.json --data-dir data/live
 
 默认监听本机；网络使用和访问令牌见 [部署说明](DEPLOYMENT.md)。任务在选定的 `data` 目录保留。升级时先停止服务，备份数据和配置，将新版本解压到新目录，再用 `--data-dir` 指向原数据目录。不要复制旧虚拟环境到新平台，重新运行安装器。旧扫描报告位于 `report/`，需要单独保留。
 
-同一设备工位避免并发启动多个实例；同一数据库由独占锁保护。关闭服务后可打包备份，任务配置快照仍在记录中。Release 来源通过标签固定，PR 保留便于审阅，不自动合并主分支。
+同一设备工位避免并发启动多个实例；同一数据库由独占锁保护。关闭服务后可打包备份，任务配置快照仍在记录中。Release 来源通过标签固定；3.1 的中英界面与此前验收升级按项目方要求合并到 `main`。旧版 v3.0.0 保留。
+
+页面语言选择器提供 English／简体中文，并保存在当前浏览器。HTML 报告采用导出时的界面语言，原始设备配置及检测证据不做翻译。首次访问时按浏览器语言选择默认语言，切换可在当前任务中进行。
 
 离线 wheel 选择与哈希校验遵循 [pip 官方下载说明](https://pip.pypa.io/en/stable/cli/pip_download/)和[安全安装说明](https://pip.pypa.io/en/stable/topics/secure-installs/)。

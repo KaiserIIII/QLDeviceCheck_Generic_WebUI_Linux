@@ -4,6 +4,8 @@ Base URL defaults to `http://127.0.0.1:8080`. JSON is UTF-8. When `QLDC_ACCESS_T
 
 `GET /api/jobs` returns lightweight history summaries: identity, timestamps, status, metadata, summary, progress, configuration hash and parent task ID. Full configuration snapshots, device results, attempts and events are available through task detail and export routes. Filtering/counting/pagination happen in SQLite without loading all saved evidence.
 
+Exports accept `lang=zh` (default) or `lang=en`. HTML headings, labels and explanations use that language; metadata, configuration and raw evidence stay original. JSON/CSV schemas and content remain unchanged by language. Unsupported language values return400. Example: `/api/jobs/{id}/export?format=html&lang=en`.
+
 | Method | Route | Behavior |
 | --- | --- | --- |
 | GET | `/api/health` | Service mode, version, active job and persistence status |

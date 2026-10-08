@@ -41,7 +41,7 @@ def make_server(host, port, service, token=''):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'QLDeviceCheckWorkbench/3.0'
+    server_version = 'QLDeviceCheckWorkbench/3.1'
 
     def setup(self):
         super().setup()
@@ -61,8 +61,8 @@ class Handler(BaseHTTPRequestHandler):
             path = unquote(parsed.path)
             self._access(path)
             query = parse_qs(parsed.query)
-            if method == 'GET' and path in ('/', '/index.html', '/legacy', '/assets/app.js', '/assets/style.css'):
-                relative = {'/': 'web/index.html', '/index.html': 'web/index.html', '/legacy': 'web/legacy.html', '/assets/app.js': 'web/assets/app.js', '/assets/style.css': 'web/assets/style.css'}[path]
+            if method == 'GET' and path in ('/', '/index.html', '/legacy', '/assets/app.js', '/assets/i18n.js', '/assets/style.css'):
+                relative = {'/': 'web/index.html', '/index.html': 'web/index.html', '/legacy': 'web/legacy.html', '/assets/app.js': 'web/assets/app.js', '/assets/i18n.js': 'web/assets/i18n.js', '/assets/style.css': 'web/assets/style.css'}[path]
                 target = BASE_DIR / relative
                 if not target.is_file():
                     raise HttpError(404, 'Asset not found')
@@ -72,7 +72,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(b'', 'image/x-icon', 204)
             svc = self.server.service
             if method == 'GET' and path == '/api/health':
-                return self._json({'ok': True, 'version': '3.0', 'mode': svc.mode, 'active_job_id': svc.active_id, 'persistence_ready': not svc.closed})
+                return self._json({'ok': True, 'version': '3.1', 'mode': svc.mode, 'active_job_id': svc.active_id, 'persistence_ready': not svc.closed})
             if method == 'GET' and path == '/api/catalog':
                 return self._json(dict(ok=True, **svc.catalog()))
             if method == 'POST' and path == '/api/config/validate':
@@ -101,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({'ok': True, 'job': svc.get(job_id)})
                 if method == 'GET' and action == 'export':
                     format = query.get('format', ['html'])[0]
-                    content, mime = export_job(svc.get(job_id), format)
+                    content, mime = export_job(svc.get(job_id), format, lang=query.get('lang', ['zh'])[0])
                     return self._send(content, mime, headers={'Content-Disposition': 'attachment; filename="acceptance-' + job_id + '.' + format + '"'})
                 if method == 'POST' and action in ('cancel', 'retest'):
                     body = self._body()

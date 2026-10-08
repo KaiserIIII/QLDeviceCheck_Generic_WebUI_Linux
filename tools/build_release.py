@@ -60,7 +60,7 @@ def build(ref, version, wheels_root, output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ref', default='HEAD')
-    parser.add_argument('--version', default='v3.0.0')
+    parser.add_argument('--version', default='v3.1.0')
     parser.add_argument('--wheels', type=Path, default=Path('output/release-wheels'))
     parser.add_argument('--output', type=Path, default=Path('output/release'))
     args = parser.parse_args()

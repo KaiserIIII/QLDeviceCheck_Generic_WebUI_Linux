@@ -21,6 +21,8 @@ The intended position is a lightweight Linux field acceptance workflow with loca
 
 For a ready-to-install bundle, download the Windows x64 or Linux x86_64 package from [Releases](https://github.com/KaiserIIII/QLDeviceCheck_Generic_WebUI_Linux/releases). Bundles include offline runtime dependencies. Install CPython 3.10+ first; then double-click `Start-Demo.cmd` on Windows or run `bash run_demo.sh` on Linux. [Release guide](docs/RELEASE.md).
 
+The workbench and compatibility scan page support **English / 简体中文**. Use the language selector to switch; your preference is remembered on this browser. On first visit, Chinese browser locales select Chinese and other locales select English. HTML reports use the selected interface language. Configured device names, entered metadata and original protocol evidence retain their source text.
+
 Python **3.10+**. The demo and offline checks also run on Windows.
 
 ```bash

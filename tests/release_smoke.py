@@ -65,6 +65,8 @@ def smoke(package):
                 wait_for(lambda: request(base, '/api/health'), lambda d: d['mode'] == 'demo')
                 with urllib.request.urlopen(base, timeout=3) as page:
                     assert 'FIELD ACCEPTANCE'.encode() in page.read()
+                with urllib.request.urlopen(base + '/assets/i18n.js', timeout=3) as resource:
+                    assert 'javascript' in resource.headers.get('Content-Type', '') and resource.read()
                 if run == 0:
                     original = request(base, '/api/jobs', {'station_id': 'RELEASE-SMOKE-01', 'batch': 'RELEASE', 'scenario': 'faults'})['job']
                     original = wait_for(lambda: request(base, '/api/jobs/' + original['id'])['job'], lambda j: j['status'] == 'completed')
@@ -76,6 +78,9 @@ def smoke(package):
                     assert comparison['comparable'] and comparison['partial_scope'] and not comparison['whole_unit_recovered']
                     report = request(base, '/api/jobs/' + child['id'] + '/export?format=json')
                     assert report['report_marker'] == 'SIMULATED' and report['config_snapshot'] == original['config_snapshot']
+                    with urllib.request.urlopen(base + '/api/jobs/' + child['id'] + '/export?format=html&lang=en', timeout=3) as html:
+                        exported = html.read()
+                        assert b'<html lang="en">' in exported and b'Industrial device acceptance report' in exported
                 else:
                     assert request(base, '/api/jobs')['total'] == 2
                     assert request(base, '/api/jobs/' + original['id'])['job']['summary']['failed'] > 0
