@@ -1,0 +1,11 @@
+# English interface and main integration
+
+User requested an English interface if missing and integration into main. Current workbench and retained legacy UI are Chinese; README already has English. The authorized addition preserves the established product architecture and workflows.
+
+Use one interface with an English/中文 language selector and one local translation resource. Compared with separate English pages or replacing Chinese, this preserves existing users and avoids duplicate workflow logic. Choose browser language on first visit (Chinese for zh, English otherwise), remember a valid selection in localStorage, and fall back to in-memory selection when storage is blocked. Update HTML lang, page title, accessible labels, navigation, static/dynamic text, statuses, scenarios, dialogs, validation and error messages in both current and legacy pages. Switching must preserve active tasks, history filters/selections and entered forms. User metadata, configured names, JSON and raw protocol evidence remain original and escaped.
+
+HTML exports accept lang=zh/en, default zh for compatibility, and translate report headings, scope/verdict labels, metadata labels, explanatory text and table headings. Preserve raw evidence and configuration exactly. JSON/CSV structure stays unchanged. UI exports select current language; unsupported language returns400. No new runtime dependency/CDN, writes to equipment or protocol behavior changes.
+
+Browser regressions use real localhost demo service, cover both languages across all workbench pages, creation/evidence/retest/comparison, English report download, language persistence, form/filter retention, legacy labels, blocked-storage behavior and390px layout. Existing Chinese workflow and93Python tests remain valid. English labels must be natural operational language rather than literal word substitution.
+
+After review, tests and final CI, update existing PR1 and merge it into main at a verified expected head. Keep v3.0.0 immutable. The standing authorization for usable Releases allows a v3.1.0 follow-up containing this language addition; build/verify/install-check matching source packages and publish only after main integration. No third-party Skill installation or external source submission.
