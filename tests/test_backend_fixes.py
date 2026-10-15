@@ -262,7 +262,8 @@ def test_nested_malformed_configuration_returns_validation_error(api, key, value
     assert request('POST', '/api/config/validate', {'config': config})[0] == 400
 
 
-def test_legacy_page_helper_uses_session_bearer_for_actual_http(api, monkeypatch, tmp_path):
+@pytest.mark.parametrize('server_token,expected_code', [('session-secret', 0), ('different-secret', 1)])
+def test_legacy_page_helper_uses_session_bearer_for_actual_http(api, monkeypatch, tmp_path, server_token, expected_code):
     import legacy_web
     svc, server, request = api
     svc.demo = False
@@ -270,7 +271,7 @@ def test_legacy_page_helper_uses_session_bearer_for_actual_http(api, monkeypatch
     monkeypatch.setattr(svc, '_snapshot', demo_config)
     monkeypatch.setattr(legacy_web, 'scan_catalog', lambda *args, **kwargs: {'ok': True})
     monkeypatch.setattr(legacy_web, 'test_single_device', lambda *args, **kwargs: {'ok': True})
-    server.access_token = 'session-secret'
+    server.access_token = server_token
     script = request('GET', '/assets/i18n.js')[1].decode() + '\n' + re.search(r'<script>([\s\S]*?)</script>', request('GET', '/legacy')[1].decode()).group(1)
     node = shutil.which('node')
     if not node:
@@ -283,9 +284,18 @@ const fs = require('node:fs');
 const script = fs.readFileSync(process.argv[1], 'utf8');
 const base = process.argv[2];
 const values = new Map([['qldc.token', 'session-secret']]);
+const statuses = [];
+let unauthorized = false;
 const element = {addEventListener(){}, querySelectorAll(){return []}};
 const document = {documentElement:{dataset:{}},querySelector:()=>element,querySelectorAll:()=>[],getElementById(){return element}, addEventListener(){}};
-const context = {document, sessionStorage:{getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)}, fetch:(url,opts)=>{if(url.includes('secret'))throw Error('credential in URL');return fetch(base+url,opts)}};
+const context = {document, sessionStorage:{getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)}, fetch:async(url,opts)=>{
+  if(url.includes('secret'))throw Error('credential in URL');
+  process.stderr.write('request '+url+'\\n');
+  const response=await fetch(base+url,{...opts,signal:AbortSignal.timeout(3000)});
+  statuses.push(response.status);
+  if(response.status===401)unauthorized=(await response.clone().json()).ok===false;
+  return response;
+}};
 vm.createContext(context);
 vm.runInContext(script, context);
 (async()=>{
@@ -294,10 +304,19 @@ vm.runInContext(script, context);
   let rejected=false;
   try{await vm.runInContext("postJson('/api/scan')",context)}catch{rejected=true}
   if(!rejected)throw Error('wrong token accepted');
-})().catch(e=>{console.error(e.message);process.exitCode=1});
+  if(JSON.stringify(statuses)!=='[200,200,401]'||!unauthorized)throw Error('unexpected response evidence');
+  // Emit proof that all awaited HTTP/helper assertions completed. Allow Node
+  // to release its request resources naturally rather than force-exiting.
+  process.stdout.write(JSON.stringify({statuses,unauthorized})+'\\n');
+})().catch(e=>{process.stderr.write(e.message+'\\n');process.exitCode=1});
 """
-    result = subprocess.run([node, '-e', code, str(script_path), 'http://127.0.0.1:%d' % server.server_port], capture_output=True, text=True, timeout=8)
-    assert result.returncode == 0, result.stderr
+    result = subprocess.run([node, '-e', code, str(script_path), 'http://127.0.0.1:%d' % server.server_port], capture_output=True, text=True, timeout=20)
+    assert result.returncode == expected_code, result.stderr
+    if expected_code == 0:
+        assert json.loads(result.stdout) == {'statuses': [200, 200, 401], 'unauthorized': True}
+    else:
+        assert 'Access token required' in result.stderr
+        assert not result.stdout, 'a server-token mismatch must not produce a success receipt'
 
 
 def test_history_sort_has_stable_ties_and_pagination_over_http(api):

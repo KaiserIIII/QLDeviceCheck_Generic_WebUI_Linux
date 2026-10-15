@@ -26,6 +26,8 @@ class InspectionService:
             raise
         self.legacy_state = {'devices': {}, 'updated_at': '', 'config_hash': None}
         self.closed = False
+        self.closing = False
+        self.persistence_error = None
         self.worker = None
         self.active_id = None
         self.active_started = None
@@ -54,7 +56,7 @@ class InspectionService:
     @contextmanager
     def legacy_operation(self):
         with self.lock:
-            if self.closed or not self.hardware_lock.acquire(blocking=False):
+            if self.closed or self.closing or self.persistence_error or not self.hardware_lock.acquire(blocking=False):
                 raise RuntimeError('A station operation is already running or service is closed')
         try:
             yield
@@ -69,27 +71,38 @@ class InspectionService:
         return {'mode': self.mode, 'config_hash': config_hash(snapshot), 'config_snapshot': snapshot,
                 'devices': catalog_devices(snapshot), 'scenarios': SCENARIOS if self.demo else ['healthy']}
 
-    def create(self, payload, snapshot=None):
+    def create(self, payload, snapshot=None, parent_job_id=None):
         snapshot = copy.deepcopy(snapshot if snapshot is not None else self._snapshot())
         devices = catalog_devices(snapshot)
         ensure_read_only(snapshot)
         scenario, metadata, selected = validate_payload(payload, devices, self.mode)
         with self.lock:
-            if self.closed:
-                raise RuntimeError('Service is closed')
+            if self.closed or self.closing:
+                raise RuntimeError('Service is closed or closing')
+            if self.persistence_error:
+                raise RuntimeError('Persistence is unavailable; restart required')
             if not self.hardware_lock.acquire(blocking=False):
                 raise RuntimeError('A station operation is already running')
             try:
                 job = refresh({'id': uuid.uuid4().hex, 'status': 'queued', 'mode': self.mode, 'scenario': scenario,
                                'metadata': metadata, 'config_hash': config_hash(snapshot), 'config_snapshot': snapshot,
-                               'device_ids': selected, 'parent_job_id': None, 'created_at': utc_now(), 'started_at': None,
+                               'device_ids': selected, 'parent_job_id': parent_job_id, 'created_at': utc_now(), 'started_at': None,
                                'finished_at': None, 'duration_ms': 0, 'results': [initial_result(d, self.demo) for d in devices if d['device_id'] in selected],
                                'events': [{'at': utc_now(), 'type': 'queued', 'message': 'Acceptance queued'}]})
                 self.store.insert(job)
                 self.active_id = job['id']
                 self.cancel_event = threading.Event()
-                self.worker = threading.Thread(target=self._run, args=(job['id'],), daemon=True, name='acceptance-worker')
-                self.worker.start()
+                try:
+                    self.worker = threading.Thread(target=self._run, args=(job['id'],), daemon=True, name='acceptance-worker')
+                    self.worker.start()
+                except Exception:
+                    self.active_id = None
+                    self.worker = None
+                    try:
+                        self._finish(job, 'failed', time.monotonic())
+                    except Exception:
+                        self.persistence_error = {'code': 'PERSISTENCE_UNAVAILABLE', 'job_id': job['id'], 'restart_required': True}
+                    raise
                 return copy.deepcopy(job)
             except Exception:
                 self.hardware_lock.release()
@@ -105,11 +118,14 @@ class InspectionService:
                 job['started_at'] = utc_now()
                 job['events'].append({'at': utc_now(), 'type': 'running', 'message': 'Acceptance started'})
                 self.store.update(job)
+            reported = set()
             def on_result(result):
                 with self.lock:
-                    if self.closed:
+                    if self.closed or self.active_id != job_id:
                         return
                     job = self.store.get(job_id)
+                    if job['status'] in TERMINAL:
+                        return
                     matches = [i for i, r in enumerate(job['results']) if r['device_id'] == result.get('device_id')]
                     if not matches or result.get('verdict') not in ('PASS', 'FAIL', 'REVIEW', 'NOT_RUN'):
                         raise ValueError('Invalid adapter result')
@@ -117,9 +133,14 @@ class InspectionService:
                     value = dict(expected, **copy.deepcopy(result))
                     value['scope'] = expected['scope']
                     value['simulated'] = self.demo
+                    if value['device_id'] in reported:
+                        if value == expected:
+                            return
+                        raise ValueError('Conflicting adapter result')
                     job['results'][matches[0]] = value
                     job['events'].append({'at': utc_now(), 'type': 'result', 'device_id': value['device_id'], 'message': value['verdict']})
                     self.store.update(refresh(job))
+                    reported.add(value['device_id'])
             if not self.cancel_event.is_set():
                 self.adapter.run(copy.deepcopy(job['config_snapshot']), list(job['device_ids']), job['scenario'], self.cancel_event.is_set, on_result)
             with self.lock:
@@ -134,7 +155,10 @@ class InspectionService:
         except Exception:
             with self.lock:
                 if not self.closed:
-                    self._finish(self.store.get(job_id), 'failed', started)
+                    try:
+                        self._finish(self.store.get(job_id), 'failed', started)
+                    except Exception:
+                        self.persistence_error = {'code': 'PERSISTENCE_UNAVAILABLE', 'job_id': job_id, 'restart_required': True}
         finally:
             with self.lock:
                 self.active_id = None
@@ -157,7 +181,7 @@ class InspectionService:
     def cancel(self, job_id):
         with self.lock:
             job = self.get(job_id)
-            if job['status'] in TERMINAL:
+            if job['status'] in TERMINAL or job['status'] == 'cancelling':
                 return job
             if self.active_id != job_id:
                 raise RuntimeError('Job is not active')
@@ -186,12 +210,7 @@ class InspectionService:
                 raise ValueError('No failed or pending devices to retest')
             data = dict(original['metadata'], scenario=payload.get('scenario', original['scenario']), device_ids=selected)
             data.update({k: v for k, v in payload.items() if k in ('operator', 'notes')})
-            job = self.create(data, snapshot=original['config_snapshot'])
-            saved = self.store.get(job['id'])
-            saved['parent_job_id'] = original['id']
-            self.store.update(saved)
-            job['parent_job_id'] = original['id']
-            return job
+            return self.create(data, snapshot=original['config_snapshot'], parent_job_id=original['id'])
 
     def insights(self):
         return self.store.insights()
@@ -200,6 +219,7 @@ class InspectionService:
         with self.lock:
             if self.closed:
                 return
+            self.closing = True
             self.cancel_event.set()
             worker = self.worker
         if worker:

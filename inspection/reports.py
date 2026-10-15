@@ -85,13 +85,14 @@ def export_job(job, format, lang='zh'):
     if format == 'csv':
         stream = io.StringIO(newline='')
         writer = csv.writer(stream)
-        columns = ['report_marker', 'job_id', 'status', 'mode', 'scenario', 'station_id', 'batch', 'operator', 'notes', 'config_hash', 'config_snapshot', 'created_at', 'finished_at', 'device_id', 'name', 'connection_type', 'interface', 'protocol', 'scope', 'verdict', 'fault_code', 'summary', 'suggestion', 'request', 'response', 'duration_ms', 'simulated', 'attempts', 'supporting_checks']
+        columns = ['report_marker', 'job_id', 'status', 'mode', 'scenario', 'station_id', 'batch', 'operator', 'notes', 'config_hash', 'config_snapshot', 'created_at', 'finished_at', 'device_id', 'name', 'connection_type', 'interface', 'protocol', 'scope', 'verdict', 'fault_code', 'summary', 'suggestion', 'request', 'response', 'duration_ms', 'simulated', 'attempts', 'supporting_checks', 'parent_job_id']
         writer.writerow(columns)
         def safe(value):
             text = str(value if value is not None else '')
             return "'" + text if text.lstrip().startswith(('=', '+', '-', '@')) or text.startswith(('\t', '\r', '\n')) else text
         for result in job['results']:
             row = dict(job, **job['metadata'], **result, report_marker=marker, job_id=job['id'], config_snapshot=json.dumps(job['config_snapshot'], ensure_ascii=False))
+            row['parent_job_id'] = job.get('parent_job_id')
             for key in ('attempts', 'supporting_checks'):
                 row[key] = json.dumps(result.get(key, []), ensure_ascii=False)
             writer.writerow([safe(row.get(key, '')) for key in columns])
