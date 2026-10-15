@@ -6,6 +6,8 @@ Base URL defaults to `http://127.0.0.1:8080`. JSON is UTF-8. When `QLDC_ACCESS_T
 
 Exports accept `lang=zh` (default) or `lang=en`. HTML headings, labels and explanations use that language; metadata, configuration and raw evidence stay original. JSON/CSV schemas and content remain unchanged by language. Unsupported language values return400. Example: `/api/jobs/{id}/export?format=html&lang=en`.
 
+CSV appends `parent_job_id` as its final,30th column. An ordinary task (including an older record without that field) exports an empty cell; a retest exports its immediate source task ID. The value comes from the task record, not a per-device field. The previous29 columns keep their positions and values, including quoting of commas, newlines and Unicode evidence. CSV readers should use the header; consumers requiring exactly29 columns need updating for this additive field. JSON and HTML keep their existing parent-link representation.
+
 | Method | Route | Behavior |
 | --- | --- | --- |
 | GET | `/api/health` | Service mode, version, active job and persistence status |
@@ -34,6 +36,8 @@ Example task payload:
 
 Omit `device_ids` to include the complete catalog; provide an array of known unique IDs to select a subset. Metadata strings have 128-character limits, except notes at 2,000. `scenario` is `healthy`, `faults`, `timeout`, `crc` or `missing` in demo; live accepts only `healthy` (the scenario label does not predetermine actual device results). Metadata may alternatively be nested under `metadata`.
 
+The supported catalog hierarchy is a parent with direct children. A child cannot contain further nonempty `child_devices`; configuration validation rejects deeper trees before task persistence or adapter invocation. Empty/omitted child lists remain valid. This prevents an unsupported descendant from silently disappearing from the expected-device count.
+
 Retest accepts `scenario`, `operator`, `notes`, and optional non-passing `device_ids`; it cannot change unit/batch, widen scope or switch mode. An empty eligible set is rejected. The returned task has `parent_job_id`.
 
 ## Record semantics
@@ -43,6 +47,8 @@ Task IDs are 32 lowercase hex characters. Times are ISO 8601 UTC. Status: `queue
 `communication_path` describes the configured connectivity/protocol check. `pci_passive` describes passive PCI observations. Neither establishes full device functionality. A partial retest's successful summary only covers its selected devices. Comparable repair conclusions require matching nonempty station/unit IDs and matching batch, mode, configuration and evidence scope. Differences remain visible as observations when those conditions fail. Compare flags and report coverage must be considered before drawing wider conclusions.
 
 Errors use `{ "ok": false, "error": "..." }`: 400 invalid fields/configuration, 401 token required, 403 origin/host or mode restriction, 404 missing resource, 409 station busy/service conflict, 413 oversized input, 500 unexpected failure. Errors omit exception traces and private paths. Do not automatically replay a hardware POST after an ambiguous connection failure; first inspect current task/history.
+
+If a worker cannot persist either its outcome or a failed terminal state, `/api/health` reports `persistence_ready: false` and `persistence_error: {"code":"PERSISTENCE_UNAVAILABLE","job_id":"...","restart_required":true}`. New tasks, retests and legacy operations are denied until restart, even if storage becomes writable again. The last durable task can remain `running`; after storage is repaired, restart marks unfinished records `interrupted` without replaying hardware. Back up the database before recovery. HTTP 200 from health only means the endpoint responded; inspect the persistence fields before starting work.
 
 ## Legacy interfaces
 

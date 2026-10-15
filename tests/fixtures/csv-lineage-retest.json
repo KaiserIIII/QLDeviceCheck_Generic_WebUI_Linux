@@ -1,0 +1,130 @@
+{
+  "id": "ea2350ff1f8646388db86344c3058dd7",
+  "status": "completed",
+  "mode": "demo",
+  "scenario": "healthy",
+  "metadata": {
+    "station_id": "R5-MOBILE-RELOAD",
+    "batch": "SIMULATED-MOBILE",
+    "operator": "Browser QA",
+    "notes": "Synthetic only: 一,二\n\"quoted\" Unicode evidence"
+  },
+  "config_hash": "a4d0da170ec831f15649204fabd846b592b5ad155f13967d60039c9705dbf10a",
+  "config_snapshot": {
+    "schema_version": 2,
+    "workstation_id": "DEMO-01",
+    "description": "SIMULATED acceptance catalog",
+    "settings": {
+      "allow_write_tests": false
+    },
+    "devices": [
+      {
+        "device_id": "DEMO_RELAY",
+        "device_name": "透明 IO 继电器通信路径",
+        "device_type": "relay",
+        "connection_type": "serial",
+        "interface": "SIM-COM1",
+        "serial_config": {
+          "baudrate": 9600
+        },
+        "protocol": {
+          "type": "modbus_rtu",
+          "function_code": 3,
+          "address": 0,
+          "count": 2
+        },
+        "test_scope": "communication_path"
+      },
+      {
+        "device_id": "DEMO_PLC",
+        "device_name": "PLC 通信寄存器",
+        "device_type": "plc",
+        "connection_type": "network",
+        "interface": "SIM-ETH0",
+        "network_config": {
+          "ip": "127.0.0.1",
+          "port": 502
+        },
+        "protocol": {
+          "type": "modbus_tcp",
+          "function_code": 3,
+          "address": 0,
+          "count": 2
+        }
+      },
+      {
+        "device_id": "DEMO_PCI",
+        "device_name": "PCI 通信卡被动状态",
+        "device_type": "pci",
+        "connection_type": "pci",
+        "pci_slot": "SIM-PCI0",
+        "pci_match": {
+          "vendor": "1234"
+        }
+      }
+    ]
+  },
+  "device_ids": [
+    "DEMO_RELAY"
+  ],
+  "parent_job_id": "28f70e72a3164ba996e7508c345ff267",
+  "created_at": "2026-10-15T11:45:48.666Z",
+  "started_at": "2026-10-15T11:45:48.669Z",
+  "finished_at": "2026-10-15T11:45:48.701Z",
+  "duration_ms": 32.41,
+  "results": [
+    {
+      "device_id": "DEMO_RELAY",
+      "name": "透明 IO 继电器通信路径",
+      "connection_type": "serial",
+      "interface": "SIM-COM1",
+      "protocol": "modbus_rtu",
+      "scope": "communication_path",
+      "verdict": "PASS",
+      "fault_code": "",
+      "summary": "SIMULATED Communication path responded",
+      "suggestion": "Business and electrical function require separate verification",
+      "request": "SIMULATED READ 01 03 00 00 00 02",
+      "response": "SIMULATED 01 03 04 00 00 00 00",
+      "duration_ms": 30,
+      "simulated": true,
+      "attempts": [],
+      "supporting_checks": []
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-10-15T11:45:48.666Z",
+      "type": "queued",
+      "message": "Acceptance queued"
+    },
+    {
+      "at": "2026-10-15T11:45:48.669Z",
+      "type": "running",
+      "message": "Acceptance started"
+    },
+    {
+      "at": "2026-10-15T11:45:48.701Z",
+      "type": "result",
+      "device_id": "DEMO_RELAY",
+      "message": "PASS"
+    },
+    {
+      "at": "2026-10-15T11:45:48.701Z",
+      "type": "completed",
+      "message": "Acceptance completed"
+    }
+  ],
+  "summary": {
+    "expected": 1,
+    "passed": 1,
+    "failed": 0,
+    "review": 0,
+    "not_run": 0,
+    "verdict": "PASS"
+  },
+  "progress": {
+    "completed": 1,
+    "total": 1
+  }
+}

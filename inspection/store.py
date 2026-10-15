@@ -26,9 +26,9 @@ class SQLiteStore:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.connection = sqlite3.connect(str(path), check_same_thread=False, timeout=5)
-        self.connection.execute('PRAGMA journal_mode=WAL')
-        self.connection.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, status TEXT NOT NULL, record TEXT NOT NULL)')
         try:
+            self.connection.execute('PRAGMA journal_mode=WAL')
+            self.connection.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, status TEXT NOT NULL, record TEXT NOT NULL)')
             with self.connection:
                 # sqlite3 does not start a transaction for DDL automatically.
                 self.connection.execute('BEGIN')

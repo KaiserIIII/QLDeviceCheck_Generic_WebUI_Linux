@@ -140,13 +140,6 @@ def match_response(data: bytes, rule: Optional[Dict[str, object]] = None) -> Tup
     if not data:
         return False, "未收到响应"
 
-    if "one_of" in rule:
-        matches = [match_response(data, item or {}) for item in rule.get("one_of", []) or []]
-        for ok, note in matches:
-            if ok:
-                return True, note
-        return False, "响应不符合任一候选规则"
-
     length = len(data)
     if "min_length" in rule and length < int(rule["min_length"]):
         return False, f"响应长度{length}小于要求{rule['min_length']}"
@@ -181,12 +174,28 @@ def match_response(data: bytes, rule: Optional[Dict[str, object]] = None) -> Tup
             return False, "响应十六进制内容不符合正则表达式"
     if rule.get("checksum") not in (None, "") and not _check_crc(data, str(rule["checksum"])):
         return False, "响应校验和不正确"
+    if "one_of" in rule:
+        for item in rule.get("one_of", []) or []:
+            ok, note = match_response(data, item or {})
+            if ok:
+                return True, note
+        return False, "响应不符合任一候选规则"
     return True, f"响应符合配置规则（{length}字节）"
 
 
-def build_modbus_rtu_read(slave_id: int, function_code: int, address: int, count: int) -> bytes:
+def validate_modbus_read(function_code: int, address: int, count: int) -> None:
+    """Validate read PDU limits before bytes are packed or hardware is opened."""
+    if any(type(value) is not int for value in (function_code, address, count)):
+        raise ProtocolConfigError("Modbus功能码、地址和数量必须是整数")
     if function_code not in READ_ONLY_MODBUS_FUNCTIONS:
-        raise ProtocolConfigError(f"Modbus RTU自动检测只允许只读功能码1、2、3、4，当前为{function_code}")
+        raise ProtocolConfigError(f"Modbus自动检测只允许只读功能码1、2、3、4，当前为{function_code}")
+    maximum = 125 if function_code in (3, 4) else 2000
+    if not 0 <= address <= 65535 or not 1 <= count <= maximum or address + count > 65536:
+        raise ProtocolConfigError(f"Modbus读取地址/数量超出范围：功能码{function_code}数量须为1到{maximum}且不能跨越65535地址")
+
+
+def build_modbus_rtu_read(slave_id: int, function_code: int, address: int, count: int) -> bytes:
+    validate_modbus_read(function_code, address, count)
     payload = bytes([
         slave_id & 0xFF,
         function_code & 0xFF,
@@ -237,8 +246,7 @@ def find_modbus_rtu_response(data: bytes, slave_id: int, function_code: int,
 
 def build_modbus_tcp_read(transaction_id: int, unit_id: int, function_code: int,
                           address: int, count: int) -> bytes:
-    if function_code not in READ_ONLY_MODBUS_FUNCTIONS:
-        raise ProtocolConfigError(f"Modbus TCP自动检测只允许只读功能码1、2、3、4，当前为{function_code}")
+    validate_modbus_read(function_code, address, count)
     pdu = bytes([
         function_code & 0xFF,
         (address >> 8) & 0xFF,

@@ -1,10 +1,11 @@
 import copy
 import json
+import math
 import os
 import re
 from typing import Dict, Iterable, List, Optional
 
-from .protocol_engine import ProtocolConfigError, decode_hex
+from .protocol_engine import ProtocolConfigError, decode_hex, validate_modbus_read
 
 
 DEFAULT_CONFIG = os.path.join(
@@ -300,6 +301,9 @@ class StandardDeviceConfig:
         seen_ids: Optional[set] = None,
     ):
         device_id = device.get("device_id") or label
+        if parent is not None and device.get("child_devices"):
+            errors.append(f"{device_id} child_devices仅支持一级子设备，不支持继续嵌套")
+            return
         for key in ("device_id", "device_name", "device_type"):
             if not device.get(key):
                 errors.append(f"{device_id} 缺少 {key}")
@@ -353,7 +357,7 @@ class StandardDeviceConfig:
             errors.append(f"{device_id} parity必须是N、E、O、M或S")
         if stopbits not in (1, 1.5, 2):
             errors.append(f"{device_id} stopbits必须是1、1.5或2")
-        if timeout <= 0 or timeout > 60:
+        if not math.isfinite(timeout) or timeout <= 0 or timeout > 60:
             errors.append(f"{device_id} timeout必须在0到60秒之间")
 
     def _validate_network_config(self, config: Dict[str, object], errors: List[str], device_id: str):
@@ -387,16 +391,19 @@ class StandardDeviceConfig:
                 continue
             if protocol_type in ("modbus_rtu", "modbus_tcp"):
                 try:
-                    function_code = int(probe.get("function_code", protocol.get("function_code", 3)) or 3)
-                    address = int(probe.get("address", 0) or 0)
-                    count = int(probe.get("count", 1) or 1)
-                except (TypeError, ValueError):
+                    values = (probe.get("function_code", protocol.get("function_code", 3)),
+                              probe.get("address", 0), probe.get("count", 1))
+                    if any(isinstance(value, bool) or isinstance(value, float) and
+                           (not math.isfinite(value) or not value.is_integer()) for value in values):
+                        raise ValueError("Non-integral protocol parameter")
+                    function_code, address, count = (int(value) for value in values)
+                except (TypeError, ValueError, OverflowError):
                     errors.append(f"{device_id} 第{index}个Modbus规则参数必须是整数")
                     continue
-                if function_code not in (1, 2, 3, 4):
-                    errors.append(f"{device_id} 自动检测只允许Modbus只读功能码1、2、3、4")
-                if not 0 <= address <= 65535 or not 1 <= count <= 2000:
-                    errors.append(f"{device_id} 第{index}个Modbus规则address/count超出范围")
+                try:
+                    validate_modbus_read(function_code, address, count)
+                except ProtocolConfigError as exc:
+                    errors.append(f"{device_id} 第{index}个Modbus规则: {exc}")
             operation = str(probe.get("operation") or protocol.get("operation") or "read").lower()
             if operation == "write" and not self.allow_write_tests():
                 errors.append(f"{device_id} 配置了写测试，但settings.allow_write_tests不是true")

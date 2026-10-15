@@ -2,6 +2,8 @@ import hmac
 import ipaddress
 import json
 import re
+import socket
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -47,6 +49,32 @@ class Handler(BaseHTTPRequestHandler):
         super().setup()
         self.connection.settimeout(5)
 
+    def finish(self):
+        try:
+            super().finish()
+        finally:
+            if getattr(self, '_rejected_post', False):
+                self._drain_rejected_input()
+
+    def _drain_rejected_input(self):
+        # Flush/send the rejection first, then half-close and discard a bounded
+        # tail. Immediate close with unread input can reset the error response.
+        try:
+            self.connection.shutdown(socket.SHUT_WR)
+            deadline = time.monotonic() + .1
+            remaining_bytes = MAX_BODY + 1
+            while remaining_bytes:
+                remaining_time = deadline - time.monotonic()
+                if remaining_time <= 0:
+                    break
+                self.connection.settimeout(min(.1, remaining_time))
+                data = self.connection.recv(min(16384, remaining_bytes))
+                if not data:
+                    break
+                remaining_bytes -= len(data)
+        except OSError:
+            pass
+
     def do_GET(self):
         self._dispatch('GET')
 
@@ -55,11 +83,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _dispatch(self, method):
         try:
-            if method == 'POST':
-                self._body()
             parsed = urlsplit(self.path)
             path = unquote(parsed.path)
             self._access(path)
+            if method == 'POST':
+                self._body()
             query = parse_qs(parsed.query)
             if method == 'GET' and path in ('/', '/index.html', '/legacy', '/assets/app.js', '/assets/i18n.js', '/assets/style.css'):
                 relative = {'/': 'web/index.html', '/index.html': 'web/index.html', '/legacy': 'web/legacy.html', '/assets/app.js': 'web/assets/app.js', '/assets/i18n.js': 'web/assets/i18n.js', '/assets/style.css': 'web/assets/style.css'}[path]
@@ -72,7 +100,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(b'', 'image/x-icon', 204)
             svc = self.server.service
             if method == 'GET' and path == '/api/health':
-                return self._json({'ok': True, 'version': '3.1', 'mode': svc.mode, 'active_job_id': svc.active_id, 'persistence_ready': not svc.closed})
+                return self._json({'ok': True, 'version': '3.1', 'mode': svc.mode, 'active_job_id': svc.active_id,
+                                   'persistence_ready': not svc.closed and not svc.persistence_error,
+                                   'persistence_error': svc.persistence_error})
             if method == 'GET' and path == '/api/catalog':
                 return self._json(dict(ok=True, **svc.catalog()))
             if method == 'POST' and path == '/api/config/validate':
@@ -138,6 +168,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(target.read_bytes(), mime + '; charset=utf-8')
             raise HttpError(404, 'Route not found')
         except HttpError as exc:
+            if method == 'POST' and not hasattr(self, '_parsed_body'):
+                self._rejected_post = True
+                self.close_connection = True
             self._json({'ok': False, 'error': str(exc)}, exc.status)
         except KeyError:
             self._json({'ok': False, 'error': 'Job not found'}, 404)
@@ -149,12 +182,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json({'ok': False, 'error': 'Operation failed'}, 500)
 
     def _access(self, path):
+        if len(self.headers.get_all('Host', [])) != 1:
+            raise HttpError(403, 'Invalid host')
         host = self.headers.get('Host', '')
         try:
             parsed = urlsplit('http://' + host)
             hostname, port = parsed.hostname or '', parsed.port or 80
         except ValueError:
             raise HttpError(403, 'Invalid host') from None
+        if parsed.netloc != host or parsed.username is not None or parsed.path or parsed.query or parsed.fragment:
+            raise HttpError(403, 'Invalid host')
         if port != self.server.server_port or (loopback(self.server.bind_host) and not loopback(hostname)):
             raise HttpError(403, 'Untrusted host')
         origin = self.headers.get('Origin')
@@ -164,7 +201,7 @@ class Handler(BaseHTTPRequestHandler):
             raise HttpError(403, 'Cross-site requests are not allowed')
         token = self.server.access_token
         if token and (path.startswith('/api/') or path.startswith('/report/')):
-            if not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + token):
+            if len(self.headers.get_all('Authorization', [])) != 1 or not hmac.compare_digest(self.headers.get('Authorization', '').encode('utf-8'), ('Bearer ' + token).encode('utf-8')):
                 raise HttpError(401, 'Access token required')
 
     def _body(self):
@@ -172,8 +209,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._parsed_body
         if self.headers.get('Transfer-Encoding'):
             raise HttpError(400, 'Transfer encoding is not supported')
+        lengths = self.headers.get_all('Content-Length', ['0'])
+        if len(lengths) != 1 or not re.fullmatch('[0-9]+', lengths[0].strip()):
+            raise HttpError(400, 'Invalid content length')
         try:
-            length = int(self.headers.get('Content-Length', '0'))
+            length = int(lengths[0])
         except ValueError:
             raise HttpError(400, 'Invalid content length') from None
         if length < 0:
@@ -187,7 +227,10 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
             raise HttpError(413, 'Request exceeds 64 KiB')
-        raw = self.rfile.read(length)
+        try:
+            raw = self.rfile.read(length)
+        except OSError:
+            raise HttpError(400, 'Incomplete request body') from None
         if len(raw) != length:
             raise HttpError(400, 'Incomplete request body')
         try:
@@ -209,6 +252,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
+        if getattr(self, '_rejected_post', False):
+            self.send_header('Connection', 'close')
         for key, value in (headers or {}).items():
             self.send_header(key, value)
         self.end_headers()
