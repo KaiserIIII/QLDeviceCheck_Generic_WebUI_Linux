@@ -65,6 +65,10 @@ Pre-merge review found and reproduced one additional compound failure: a worker 
 
 ## Scope and limits
 
+The first PR matrix at candidate `17b3f4a` passed three jobs but its Windows/Python 3.13 job timed out waiting eight seconds for a preexisting Node helper subprocess (212 other tests passed). The same candidate's separate push matrix passed all four jobs in [run 38734469352](https://github.com/KaiserIIII/QLDeviceCheck_Generic_WebUI_Linux/actions/runs/38734469352); the failed PR run is retained as [run 38734503505](https://github.com/KaiserIIII/QLDeviceCheck_Generic_WebUI_Linux/actions/runs/38734503505). Those logs do not establish where the delay occurred or prove a product/runtime defect.
+
+The test harness now gives each real fetch a three-second deadline, requires response statuses `[200,200,401]` and unauthorized JSON `ok:false`, emits request/completion evidence, and allows a separate 20-second subprocess lifecycle budget. A server-token mismatch must fail with the specific auth error and no success receipt. It uses natural Node shutdown. The final Git-tree export passed **214 tests in 36.00 seconds** (including both harness controls), with all 23 self-checks, configuration validation and compilation still passing. Runtime coverage is unchanged from the preceding 213-test result. Inspect final PR checks for the new head's cross-platform outcome; the earlier timeout is not hidden or counted as a production bug.
+
 Coverage is collected for `inspection/`, `core.protocol_engine` and `core.transport`, not the entire legacy detector or repository. The original offline self-test adds loopback checks but does not establish field hardware compatibility. Browser tests are separate from the Python CI job and use an existing local browser runtime.
 
 This automated suite does not measure serial driver behavior, electrical performance, sustained station load, power-loss filesystems or custom vendor protocols. The earlier usage-test confirmation is separate from these automated results. OS-level device exclusivity across different station data directories is not provided.
