@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Tuple
 
 
 READ_ONLY_MODBUS_FUNCTIONS = (1, 2, 3, 4)
+MODBUS_EXCEPTION_CODES = (1, 2, 3, 4, 5, 6, 8, 10, 11)
 
 
 class ProtocolConfigError(ValueError):
@@ -293,6 +294,8 @@ def validate_modbus_tcp_response(data: bytes, transaction_id: int, unit_id: int,
         if declared_length != 3:
             return False, "Modbus TCP异常响应长度不正确", frame
         code = frame[8]
+        if code not in MODBUS_EXCEPTION_CODES:
+            return False, "Modbus TCP异常码未定义", frame
         if accept_exception:
             return True, f"设备返回Modbus异常码0x{code:02X}，按配置允许异常响应", frame
         return False, f"设备返回Modbus异常码0x{code:02X}", frame
@@ -308,3 +311,52 @@ def validate_modbus_tcp_response(data: bytes, transaction_id: int, unit_id: int,
         if byte_count != expected_bytes:
             return False, "Modbus TCP响应数量与请求不匹配", frame
     return True, "返回有效Modbus TCP响应", frame
+
+
+def validate_modbus_device_id_response(data: bytes, transaction_id: int,
+                                       unit_id: int) -> Tuple[bool, str, bytes]:
+    """Validate the first page of a 43/14 basic-ID reply; never infer a model."""
+    validate_modbus_target(unit_id, tcp=True)
+    if len(data) < 9:
+        return False, "设备识别响应长度不足", b""
+    if int.from_bytes(data[:2], "big") != transaction_id or data[2:4] != b"\x00\x00":
+        return False, "设备识别事务号或协议标识不匹配", b""
+    length = int.from_bytes(data[4:6], "big")
+    if not 3 <= length <= 254 or len(data) < 6 + length:
+        return False, "设备识别长度字段不正确", b""
+    frame = data[:6 + length]
+    if frame[6] != unit_id:
+        return False, "设备识别单元标识不匹配", frame
+    if frame[7] == 0xAB:
+        if length != 3:
+            return False, "设备识别异常响应长度不正确", frame
+        if frame[8] not in MODBUS_EXCEPTION_CODES:
+            return False, "设备识别异常码未定义", frame
+        return True, f"设备返回Modbus异常码0x{frame[8]:02X}，仅确认协议可达", frame
+    if length < 8 or frame[7:10] != b"\x2B\x0E\x01":
+        return False, "设备识别功能、MEI或访问码不匹配", frame
+    conformity, more, next_object, count = frame[10:14]
+    if conformity not in (1, 2, 3, 0x81, 0x82, 0x83) or more not in (0, 0xFF):
+        return False, "设备识别能力或分页标识无效", frame
+    if more == 0 and next_object != 0:
+        return False, "设备识别末页的后续对象标识无效", frame
+    if not 1 <= count <= 3 or (more == 0 and count != 3):
+        return False, "基本设备识别对象为空或缺失", frame
+    offset, last_object = 14, -1
+    for expected_object in range(count):
+        if offset + 2 > len(frame):
+            return False, "设备识别对象头不完整", frame
+        object_id, size = frame[offset:offset + 2]
+        offset += 2
+        if object_id != expected_object or offset + size > len(frame):
+            return False, "设备识别对象次序或长度无效", frame
+        last_object = object_id
+        offset += size
+    if offset != len(frame):
+        return False, "设备识别对象数量与长度不匹配", frame
+    if more == 0xFF and (count == 3 or next_object != last_object + 1):
+        return False, "设备识别分页未前进", frame
+    note = f"返回有效基本设备识别响应，含{count}个对象"
+    if more == 0xFF:
+        note += "；存在后续分页，本次不继续查询"
+    return True, note, frame
