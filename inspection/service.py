@@ -227,10 +227,17 @@ class InspectionService:
         with self.lock:
             if self.closed:
                 return
-            if self.active_id:
-                job = self.store.get(self.active_id)
-                self._finish(job, 'interrupted', self.active_started or time.monotonic())
-            self.closed = True
-            self.store.close()
-            if not self.hardware_lock.locked():
-                self.owner.close()
+            try:
+                if self.active_id:
+                    job = self.store.get(self.active_id)
+                    self._finish(job, 'interrupted', self.active_started or time.monotonic())
+            finally:
+                # Even a failed terminal write must reject late callbacks and
+                # close storage. The active worker/legacy operation keeps the
+                # ownership lease until its existing finalizer releases it.
+                self.closed = True
+                try:
+                    self.store.close()
+                finally:
+                    if not self.hardware_lock.locked():
+                        self.owner.close()
