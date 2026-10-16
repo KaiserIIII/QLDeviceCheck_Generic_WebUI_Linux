@@ -839,7 +839,7 @@ class GenericDetector:
             return {"ok": False, **test}
 
     def _configured_modbus_rtu_frames(self, protocol: dict) -> List[tuple]:
-        slave_id = int(protocol.get("slave_id", 1) or 1)
+        slave_id = int(protocol.get("slave_id", 1))
         registers = protocol.get("probes", []) or protocol.get("test_registers", []) or [{"address": 0, "count": 1, "description": "默认只读寄存器"}]
         frames = []
         default_function = int(protocol.get("function_code", 3) or 3)
@@ -1202,7 +1202,7 @@ class GenericDetector:
     def _test_modbus_tcp_configured(self, ip: str, port: int, iface: str,
                                     protocol: dict, profile: Optional[dict] = None) -> dict:
         profile = profile or self._network_profile({"protocol": protocol}, {"network_config": {"transport": "tcp", "device_role": "server"}})
-        unit_id = int(protocol.get("unit_id", 1) or 1)
+        unit_id = int(protocol.get("unit_id", 1))
         registers = protocol.get("probes", []) or protocol.get("test_registers", []) or [{"address": 0, "count": 1, "description": "默认只读寄存器"}]
         start = time.time()
         match_mode = str(protocol.get("match_mode") or "any").lower()
@@ -2085,7 +2085,7 @@ class GenericDetector:
     def _modbus_rtu_probe_frames(self) -> List[tuple]:
         frames = []
         for probe in self.config.protocol_probes("modbus_rtu"):
-            slave_id = int(probe.get("slave_id", 1) or 1)
+            slave_id = int(probe.get("slave_id", 1))
             registers = probe.get("test_registers", []) or [{"address": 0, "count": 1, "description": "默认只读探测"}]
             for reg in registers:
                 address = int(reg.get("address", 0) or 0)
@@ -2335,7 +2335,7 @@ class GenericDetector:
             }]
         transaction_id = 2
         for probe in probes[:8]:
-            unit_id = int(probe.get("unit_id", 1) or 1)
+            unit_id = int(probe.get("unit_id", 1))
             registers = probe.get("test_registers", []) or [{"address": 0, "count": 1, "description": "默认只读探测"}]
             for reg in registers[:2]:
                 address = int(reg.get("address", 0) or 0)

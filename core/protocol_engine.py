@@ -194,10 +194,18 @@ def validate_modbus_read(function_code: int, address: int, count: int) -> None:
         raise ProtocolConfigError(f"Modbus读取地址/数量超出范围：功能码{function_code}数量须为1到{maximum}且不能跨越65535地址")
 
 
+def validate_modbus_target(identifier: int, tcp: bool = False) -> None:
+    """Refuse target aliasing; RTU read probes require a unicast responder."""
+    low, high = (0, 255) if tcp else (1, 247)
+    if type(identifier) is not int or not low <= identifier <= high:
+        raise ProtocolConfigError(f"Modbus设备标识必须是{low}到{high}之间的整数")
+
+
 def build_modbus_rtu_read(slave_id: int, function_code: int, address: int, count: int) -> bytes:
+    validate_modbus_target(slave_id)
     validate_modbus_read(function_code, address, count)
     payload = bytes([
-        slave_id & 0xFF,
+        slave_id,
         function_code & 0xFF,
         (address >> 8) & 0xFF,
         address & 0xFF,
@@ -209,10 +217,11 @@ def build_modbus_rtu_read(slave_id: int, function_code: int, address: int, count
 
 def find_modbus_rtu_response(data: bytes, slave_id: int, function_code: int,
                              accept_exception: bool = False, expected_count: Optional[int] = None) -> Tuple[bool, str, bytes]:
+    validate_modbus_target(slave_id)
     if not data:
         return False, "未收到响应", b""
     for start in range(max(0, len(data) - 4)):
-        if data[start] != (slave_id & 0xFF) or start + 4 >= len(data):
+        if data[start] != slave_id or start + 4 >= len(data):
             continue
         actual_function = data[start + 1]
         is_exception = actual_function == (function_code | 0x80)
@@ -246,6 +255,7 @@ def find_modbus_rtu_response(data: bytes, slave_id: int, function_code: int,
 
 def build_modbus_tcp_read(transaction_id: int, unit_id: int, function_code: int,
                           address: int, count: int) -> bytes:
+    validate_modbus_target(unit_id, tcp=True)
     validate_modbus_read(function_code, address, count)
     pdu = bytes([
         function_code & 0xFF,
@@ -258,7 +268,7 @@ def build_modbus_tcp_read(transaction_id: int, unit_id: int, function_code: int,
         transaction_id.to_bytes(2, "big")
         + b"\x00\x00"
         + (len(pdu) + 1).to_bytes(2, "big")
-        + bytes([unit_id & 0xFF])
+        + bytes([unit_id])
         + pdu
     )
 
@@ -266,6 +276,7 @@ def build_modbus_tcp_read(transaction_id: int, unit_id: int, function_code: int,
 def validate_modbus_tcp_response(data: bytes, transaction_id: int, unit_id: int,
                                   function_code: int, accept_exception: bool = False,
                                   expected_count: Optional[int] = None) -> Tuple[bool, str, bytes]:
+    validate_modbus_target(unit_id, tcp=True)
     if len(data) < 9:
         return False, "Modbus TCP响应长度不足", b""
     if int.from_bytes(data[0:2], "big") != transaction_id or data[2:4] != b"\x00\x00":
@@ -275,7 +286,7 @@ def validate_modbus_tcp_response(data: bytes, transaction_id: int, unit_id: int,
     if declared_length < 3 or declared_length > 254 or len(data) < frame_length:
         return False, "Modbus TCP长度字段不正确", b""
     frame = data[:frame_length]
-    if frame[6] != (unit_id & 0xFF):
+    if frame[6] != unit_id:
         return False, "Modbus TCP单元标识不匹配", frame
     actual_function = frame[7]
     if actual_function == (function_code | 0x80):
