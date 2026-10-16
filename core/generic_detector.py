@@ -29,6 +29,7 @@ from .protocol_engine import (
     protocol_probes,
     request_payload,
     response_rule,
+    validate_modbus_device_id_response,
     validate_modbus_tcp_response,
 )
 
@@ -2305,15 +2306,16 @@ class GenericDetector:
         try:
             sock.connect((ip, port))
             sock.sendall(MODBUS_TCP_DEVICE_ID)
-            response = sock.recv(260)
+            response = receive_response(sock, 0.45, max_bytes=260, complete=modbus_tcp_complete)
             duration_ms = round((time.time() - start) * 1000, 1)
-            if response:
+            response_ok, response_note, valid_frame = validate_modbus_device_id_response(response, 1, 1)
+            if response_ok:
                 return {
-                    "type": "TCP连通 + Modbus TCP设备识别",
+                    "type": "TCP连通 + Modbus TCP异常响应" if valid_frame[7] == 0xAB else "TCP连通 + Modbus TCP设备识别",
                     "request": f"TCP connect; {self._bytes_to_hex(MODBUS_TCP_DEVICE_ID)}",
-                    "response": self._bytes_to_hex(response),
+                    "response": self._bytes_to_hex(valid_frame),
                     "status": "有响应",
-                    "summary": f"{ip}:{port} 对Modbus TCP设备识别请求有响应",
+                    "summary": f"{ip}:{port} {response_note}",
                     "duration_ms": duration_ms,
                 }
         except OSError:
@@ -2349,16 +2351,22 @@ class GenericDetector:
                 try:
                     sock.connect((ip, port))
                     sock.sendall(frame)
-                    response = sock.recv(260)
+                    response = receive_response(sock, 0.45, max_bytes=260, complete=modbus_tcp_complete)
                     duration_ms = round((time.time() - start) * 1000, 1)
-                    if response:
-                        status_note = self._modbus_tcp_response_note(response)
+                    response_ok, response_note, valid_frame = validate_modbus_tcp_response(
+                        response, int.from_bytes(frame[:2], "big"), unit_id, 3,
+                        accept_exception=True, expected_count=count,
+                    )
+                    if response_ok:
+                        is_exception = valid_frame[7] == 0x83
+                        if is_exception:
+                            response_note = f"设备返回Modbus异常码0x{valid_frame[8]:02X}，仅确认协议可达"
                         return {
-                            "type": "TCP连通 + Modbus TCP标准参数只读验证",
+                            "type": "TCP连通 + Modbus TCP异常响应" if is_exception else "TCP连通 + Modbus TCP标准参数只读验证",
                             "request": f"{label}; {self._bytes_to_hex(frame)}",
-                            "response": self._bytes_to_hex(response),
+                            "response": self._bytes_to_hex(valid_frame),
                             "status": "有响应",
-                            "summary": f"{ip}:{port} 对标准只读寄存器请求有响应；{status_note}",
+                            "summary": f"{ip}:{port} 对标准只读寄存器请求返回有效协议帧；{response_note}",
                             "duration_ms": duration_ms,
                         }
                 except OSError:
