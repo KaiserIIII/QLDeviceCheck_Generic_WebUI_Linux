@@ -243,6 +243,8 @@ def find_modbus_rtu_response(data: bytes, slave_id: int, function_code: int,
             continue
         if is_exception:
             code = frame[2]
+            if code not in MODBUS_EXCEPTION_CODES:
+                return False, f"Modbus RTU异常码0x{code:02X}未定义", frame
             if accept_exception:
                 return True, f"设备返回Modbus异常码0x{code:02X}，按配置允许异常响应", frame
             return False, f"设备返回Modbus异常码0x{code:02X}", frame
