@@ -5,7 +5,7 @@ import os
 import re
 from typing import Dict, Iterable, List, Optional
 
-from .protocol_engine import ProtocolConfigError, decode_hex, validate_modbus_read
+from .protocol_engine import ProtocolConfigError, decode_hex, validate_modbus_read, validate_modbus_target
 
 
 DEFAULT_CONFIG = os.path.join(
@@ -392,16 +392,18 @@ class StandardDeviceConfig:
             if protocol_type in ("modbus_rtu", "modbus_tcp"):
                 try:
                     values = (probe.get("function_code", protocol.get("function_code", 3)),
-                              probe.get("address", 0), probe.get("count", 1))
+                              probe.get("address", 0), probe.get("count", 1),
+                              protocol.get("unit_id" if protocol_type == "modbus_tcp" else "slave_id", 1))
                     if any(isinstance(value, bool) or isinstance(value, float) and
                            (not math.isfinite(value) or not value.is_integer()) for value in values):
                         raise ValueError("Non-integral protocol parameter")
-                    function_code, address, count = (int(value) for value in values)
+                    function_code, address, count, target = (int(value) for value in values)
                 except (TypeError, ValueError, OverflowError):
                     errors.append(f"{device_id} 第{index}个Modbus规则参数必须是整数")
                     continue
                 try:
                     validate_modbus_read(function_code, address, count)
+                    validate_modbus_target(target, tcp=protocol_type == "modbus_tcp")
                 except ProtocolConfigError as exc:
                     errors.append(f"{device_id} 第{index}个Modbus规则: {exc}")
             operation = str(probe.get("operation") or protocol.get("operation") or "read").lower()
